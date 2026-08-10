@@ -1,0 +1,5 @@
+# Incident Response Runbook
+
+When a service's error rate crosses its alerting threshold, the on-call engineer is paged automatically and has 15 minutes to acknowledge before the page escalates to the secondary on-call. Once acknowledged, the engineer opens an incident channel, assigns a severity level (SEV1 through SEV4), and begins triage using the service's dashboards. For SEV1 and SEV2 incidents, the on-call engineer must escalate to the on-call lead within 15 minutes of the page being acknowledged, even if the root cause is not yet known, so a senior responder is looped in early rather than after the situation has already worsened.
+
+Each downstream service call is wrapped in a circuit breaker. The breaker trips into the open state after five consecutive failures within a 30 second window, and stays open for a cooldown period of 60 seconds before allowing a single trial request through in the half-open state. Retries against a tripped dependency use exponential backoff computed as base_delay_ms * 2^attempt, capped at 8 seconds, so a struggling downstream service is not hammered by retry storms while it recovers.

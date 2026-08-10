@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+message: "If you use Datum in your work, please cite it as below."
+title: "Datum: Retrieval as a Compiled Query for Agentic Systems"
+abstract: >-
+  Datum is a retrieval substrate for AI agents. It compiles every query into an
+  explainable, replayable physical plan over one versioned, content-addressed
+  store, so identity, cost, trust, and evidence sufficiency are part of the
+  request rather than smuggled through a metadata filter.
+type: software
+authors:
+  - family-names: Kumar
+    given-names: Ayush
+    alias: COLONAYUSH
+repository-code: "https://github.com/COLONAYUSH/Datum"
+url: "https://github.com/COLONAYUSH/Datum"
+version: "0.1.0"
+date-released: "2026-08-10"
+license: Apache-2.0
+keywords:
+  - retrieval
+  - retrieval-augmented-generation
+  - ai-agents
+  - information-retrieval
+  - hybrid-search
+  - vector-search
+  - model-context-protocol

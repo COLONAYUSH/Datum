@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "datum"
+version = "0.1.0"
+description = "A retrieval substrate for the agentic era: a compiled plan, not a hand-wired physical path."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+dependencies = [
+    "psycopg[binary,pool]>=3.1",
+    "pgvector>=0.3",
+    # v2 floor is load-bearing: mcp_server/server.py imports
+    # mcp.server.mcpserver.MCPServer, which does not exist in the 1.x line
+    # (1.x shipped it as mcp.server.fastmcp.FastMCP). See docs/decisions.md #10.
+    "mcp>=2.0",
+    "click>=8.1",
+]
+
+[project.optional-dependencies]
+# Heavy, lazily-imported dependencies. Installing datum's core (kernel, storage,
+# groundstore, writepath, planner, evidence, mcp_server, grep + BM25 operators)
+# never needs these; they are imported at call time, not module-import time —
+# docling in writepath/policies (Phase-1 parser), and sentence-transformers in
+# BOTH derivation/views/dense.py (the dense embedder) and planner/reranker.py
+# (the cross-encoder). One `embed` extra covers both: the cross-encoder ships
+# inside sentence-transformers, so the ANN operator and the reranker share it.
+# Floors, not pins (decisions.md #9): the dev box runs sentence-transformers
+# 5.7.0 / torch 2.13.0, but nothing here needs a version newer than the floor.
+parse = ["docling>=2.0"]
+embed = ["sentence-transformers>=3.0"]
+all = ["datum[parse,embed]"]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "hypothesis>=6.100",
+    "testcontainers[postgres]>=4.7",
+    # eval/regression.py loads .yaml fixture files (e.g.
+    # tests/fixtures/regression_set.yaml); PyYAML is a dev/test-time need,
+    # not a runtime dependency of every install (the loader also accepts
+    # plain .json, and imports yaml lazily only when a .yaml/.yml is used).
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+datum = "datum.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+# `packages.find` only collects .py files; the storage layer's hand-rolled
+# migration runner (storage/migrations/__init__.py) reads its numbered
+# .sql files off disk relative to its own module path at runtime, so they
+# must ship inside the built package too, not just exist in the source
+# tree. Editable installs (this project's dev setup) read straight from
+# the source tree and mask this gap — it only bites a real wheel build.
+"datum.storage.migrations" = ["*.sql"]
+# PEP 561 marker: without it, an external consumer's type checker treats all
+# of datum as untyped Any and cannot statically check the semver-frozen
+# kernel Protocols (Operator, WritePolicy, Policy, ...) that third-party
+# operator authors implement against — the typed contract surface is the
+# product, and the failure without this marker is silent. (Reviewed finding 10.)
+"datum" = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

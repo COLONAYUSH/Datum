@@ -1,0 +1,82 @@
+# The v1 fixed, human-curated regression set (FRAMEWORK.md §MVP definition,
+# "Eval" bullet). Every case below is written against the sample corpus at
+# tests/fixtures/sample_corpus/ — read that directory before editing this
+# file, since expected_content_substrings must actually appear in it.
+#
+# Two namespaces exist in the sample corpus: "eng" (eng_*.md) and "hr"
+# (hr_*.md). Cases 8/9 are a deliberately parallel "escalate within N of M"
+# pair, one per namespace, chosen so a retriever that ignores
+# principal_namespace and just matches on wording would plausibly return
+# the wrong one. Case 11 is a cross-namespace negative control: its answer
+# exists in the corpus, but not in the namespace the case queries as, so
+# the only correct outcome is abstention (see regression.py's module
+# docstring on why an empty expected_content_substrings list means that).
+
+- query: "How many consecutive failures does it take before the circuit breaker opens?"
+  expected_content_substrings:
+    - "five consecutive failures within a 30 second window"
+  min_sufficiency: 0.5
+  principal_namespace: eng
+
+- query: "What formula does the retry backoff use before opening the circuit?"
+  expected_content_substrings:
+    - "base_delay_ms * 2^attempt"
+  min_sufficiency: 0.5
+  principal_namespace: eng
+
+- query: "What is the company's policy on remote work stipends for home office equipment?"
+  expected_content_substrings: []
+  min_sufficiency: 0.0
+  principal_namespace: hr
+
+- query: "What is the PTO accrual rate for full-time employees?"
+  expected_content_substrings:
+    - "accrues at a rate of 1.25 days per month"
+  min_sufficiency: 0.5
+  principal_namespace: hr
+
+- query: "How large are the batches used when backfilling a new column?"
+  expected_content_substrings:
+    - "batches of 5,000 rows"
+  min_sufficiency: 0.5
+  principal_namespace: eng
+
+- query: "What must a new hire sign before payroll can be activated?"
+  expected_content_substrings:
+    - "confidentiality and IP assignment agreement"
+  min_sufficiency: 0.5
+  principal_namespace: hr
+
+- query: "How much notice do callers get before a deprecated public API is fully retired?"
+  expected_content_substrings:
+    - "180-day deprecation notice"
+  min_sufficiency: 0.5
+  principal_namespace: eng
+
+- query: "How quickly must an on-call engineer escalate a SEV1 incident to the on-call lead?"
+  expected_content_substrings:
+    - "escalate to the on-call lead within 15 minutes"
+  min_sufficiency: 0.5
+  principal_namespace: eng
+
+- query: "How quickly should a PTO balance question be escalated to a HR business partner?"
+  expected_content_substrings:
+    - "HR business partner within 2 business days"
+  min_sufficiency: 0.5
+  principal_namespace: hr
+
+- query: "What programming language is the payments service written in?"
+  expected_content_substrings: []
+  min_sufficiency: 0.0
+  principal_namespace: eng
+
+# Deliberately the SAME query string as the eng case above, asked as a
+# different principal. Do not "deduplicate" this against that case: the
+# repeated query is the point -- it is the only case that proves a query
+# whose answer exists in "eng" is NOT retrievable by an "hr" principal
+# (cross-namespace leak detection). See tests/eval/test_regression.py's
+# test_run_regression_detects_a_cross_namespace_leak.
+- query: "How much notice do callers get before a deprecated public API is fully retired?"
+  expected_content_substrings: []
+  min_sufficiency: 0.0
+  principal_namespace: hr
