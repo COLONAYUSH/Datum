@@ -38,8 +38,8 @@ through a metadata filter.
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 
 <!--
-[![CI](https://img.shields.io/github/actions/workflow/status/OWNER/datum/ci.yml?label=CI)](https://github.com/OWNER/datum/actions)
-[![Stars](https://img.shields.io/github/stars/OWNER/datum?style=social)](https://github.com/OWNER/datum/stargazers)
+[![CI](https://img.shields.io/github/actions/workflow/status/COLONAYUSH/Datum/ci.yml?label=CI)](https://github.com/COLONAYUSH/Datum/actions)
+[![Stars](https://img.shields.io/github/stars/COLONAYUSH/Datum?style=social)](https://github.com/COLONAYUSH/Datum/stargazers)
 -->
 
 <p>
@@ -262,8 +262,8 @@ dataclasses with zero I/O. Everything else depends on it in one direction and ne
 
 ```bash
 # 1. Get the code and install it (editable, with the dense-retrieval extra)
-git clone https://github.com/OWNER/datum.git
-cd datum
+git clone https://github.com/COLONAYUSH/Datum.git
+cd Datum
 python -m venv .venv && source .venv/bin/activate
 pip install -e '.[embed]'
 
@@ -609,8 +609,8 @@ A few house rules that keep the design honest:
 
 ## Community and support
 
-- **Questions and ideas** → open a [Discussion](https://github.com/OWNER/datum/discussions).
-- **Bugs and feature requests** → open an [Issue](https://github.com/OWNER/datum/issues).
+- **Questions and ideas** → open a [Discussion](https://github.com/COLONAYUSH/Datum/discussions).
+- **Bugs and feature requests** → open an [Issue](https://github.com/COLONAYUSH/Datum/issues).
 - **Security reports** → please follow `SECURITY.md` (private disclosure), not a public issue.
 
 <div align="right"><a href="#contents">back to top</a></div>
@@ -625,7 +625,7 @@ reference:
   title        = {Datum: Retrieval as a Compiled Query for Agentic Systems},
   author       = {Kumar, Ayush},
   year         = {2026},
-  url          = {https://github.com/OWNER/datum},
+  url          = {https://github.com/COLONAYUSH/Datum},
   note         = {Manuscript in preparation}
 }
 ```
@@ -634,14 +634,14 @@ reference:
 
 ## Star history
 
-<a href="https://star-history.com/#OWNER/datum&Date">
-  <img alt="Star history chart" src="https://api.star-history.com/svg?repos=OWNER/datum&type=Date" width="600">
+<a href="https://star-history.com/#COLONAYUSH/Datum&Date">
+  <img alt="Star history chart" src="https://api.star-history.com/svg?repos=COLONAYUSH/Datum&type=Date" width="600">
 </a>
 
 ## Contributors
 
-<a href="https://github.com/OWNER/datum/graphs/contributors">
-  <img alt="Contributors" src="https://contrib.rocks/image?repo=OWNER/datum">
+<a href="https://github.com/COLONAYUSH/Datum/graphs/contributors">
+  <img alt="Contributors" src="https://contrib.rocks/image?repo=COLONAYUSH/Datum">
 </a>
 
 ## License
