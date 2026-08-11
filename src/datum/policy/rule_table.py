@@ -52,33 +52,60 @@ class RuleTablePolicy:
     #: Phase 2's promotion loop earns changes to this table, nothing else does.
     _WEIGHTS = {"grep": 1.0, "bm25": 1.0, "ann": 1.0}
 
-    #: How many fused candidates the cross-encoder re-scores — and, when a
-    #: real reranker is active, the final candidate count (decisions.md #22).
-    #: Hand-declared: deep enough that fusion recall feeds it, small enough
-    #: that a CPU cross-encoder answers interactively.
+    #: The per-source depth the cross-encoder pool draws from — the fused
+    #: top-N unioned with each operator's OWN top-N (decisions.md #22,
+    #: revised #38: a plain fused-order cut let a single operator's #1 pick
+    #: be buried below the cut by candidates several operators mildly agree
+    #: on). Hand-declared: deep enough that fusion recall feeds it, small
+    #: enough that a CPU cross-encoder answers interactively even with the
+    #: union's larger pool.
     _RERANK_DEPTH = 16
 
-    #: The abstention floor on top dense cosine similarity (decisions.md #29).
-    #: UNLIKE the weights and rerank depth above (declared before any fixture
-    #: existed), this value is READ OFF the eval fixture — on that 11-case /
-    #: 5-document set, genuine matches score >= 0.669 dense cosine and
-    #: out-of-corpus queries <= 0.606, a 0.06 gap; 0.63 sits inside it. It is
-    #: therefore fixture-derived and uncalibrated: real calibration on a
-    #: held-out slice is Phase 1 (the sufficiency score it complements is
-    #: `calibrated=False` for the same reason). The margin is thin — the
-    #: jargon-heavy circuit-breaker/backoff queries (dense ~0.67) are the
-    #: closest positives and will be the first to abstain wrongly as the
-    #: corpus grows, which is the signal that calibration is overdue.
-    _ABSTAIN_MIN_SIMILARITY = 0.63
+    #: Default abstention floor on top dense cosine similarity, and WHY it is
+    #: a constructor parameter, not one hard number (decisions.md #29, revised
+    #: #34). Real multi-corpus stress-testing proved a single global floor
+    #: cannot work: the absolute cosine SCALE is corpus-dependent (a diverse
+    #: 19-page report's genuine matches sit ~0.44–0.55 dense cosine; a small
+    #: homogeneous policy corpus's sit ~0.53–0.75), and the two ranges do not
+    #: share a threshold — a floor that abstains one corpus's out-of-corpus
+    #: queries wrongly abstains the other's real answers. So the floor is
+    #: PER-DEPLOYMENT: this default (0.44) is recall-biased for a diverse
+    #: corpus (for a retrieval substrate feeding an LLM, a false abstention —
+    #: refusing when the answer is present — is worse than returning weak
+    #: evidence the model can judge), and a deployment raises it for a
+    #: homogeneous corpus. Auto-derivation from each namespace's own
+    #: similarity distribution is the Phase-1 replacement for hand-setting it.
+    _ABSTAIN_MIN_SIMILARITY = 0.44
+
+    def __init__(
+        self,
+        abstain_min_similarity: float | None = None,
+        overrides: dict[str, dict] | None = None,
+    ) -> None:
+        self._abstain_min_similarity = (
+            self._ABSTAIN_MIN_SIMILARITY
+            if abstain_min_similarity is None
+            else abstain_min_similarity
+        )
+        # Per-namespace calibrated parameters (decisions.md #44): the OUTPUT of
+        # `datum calibrate`, loaded from the policy_overrides table at wiring
+        # time. Keys: fusion_weights (dict), abstain_min_similarity (float).
+        # A namespace without an override gets the hand-declared defaults —
+        # calibration EARNS changes to this table per corpus; nothing else does
+        # (the same promotion discipline the Phase-2 learned policy will use).
+        self._overrides = overrides or {}
 
     def select(self, context: _SelectionContext) -> Fusion:
         available = tuple(k for k in self._WEIGHTS if k in context.available_operator_kinds)
         if not available:
             available = context.available_operator_kinds
-        weights = {k: self._WEIGHTS.get(k, 1.0) for k in available}
+        override = self._overrides.get(getattr(context, "namespace", None) or "", {})
+        base_weights = override.get("fusion_weights", self._WEIGHTS)
+        weights = {k: base_weights.get(k, self._WEIGHTS.get(k, 1.0)) for k in available}
+        floor = override.get("abstain_min_similarity", self._abstain_min_similarity)
         # The floor only applies when a dense operator is present to produce a
         # similarity to threshold on; grep/BM25-only has no such signal.
-        abstain = self._ABSTAIN_MIN_SIMILARITY if "ann" in available else None
+        abstain = floor if "ann" in available else None
         return Fusion(
             operator_kinds=available,
             fusion_weights=weights,

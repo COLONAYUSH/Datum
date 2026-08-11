@@ -49,6 +49,7 @@ from datum.operators.grep_op import GrepOperator
 from datum.operators.registry import OperatorRegistry
 from datum.planner.compiler import PlanCompiler
 from datum.planner.reranker import Reranker, default_reranker
+from datum.policy.rule_table import RuleTablePolicy
 from datum.planner.trace import TraceStore
 from datum.storage.migrations import run_migrations
 from datum.storage.wal import WAL
@@ -70,7 +71,9 @@ class Corpus:
         compiler: PlanCompiler,
         preconditions: PreconditionRegistry,
         engine: DerivationEngine,
+        dsn: str = "",
     ) -> None:
+        self._dsn = dsn
         self._wal = wal
         self._store = store
         self._trace = trace
@@ -89,6 +92,12 @@ class Corpus:
         hit_signing_key: bytes | None = None,
         embedder: Embedder | None = None,
         reranker: Reranker | None = None,
+        abstain_min_similarity: float | None = None,
+        ocr_full_page: bool = False,
+        image_ocr: bool = False,
+        image_ocr_langs: list[str] | None = None,
+        fts_config: str = "english",
+        vision_describer=None,
     ) -> "Corpus":
         """Migrate, wire every layer, and register every operator through the
         conformance gate. If any operator — Datum's own included — failed
@@ -112,7 +121,15 @@ class Corpus:
 
         if embedder is None and importlib.util.find_spec("sentence_transformers") is not None:
             embedder = SentenceTransformersEmbedder()
-        views: list[ViewBuilder] = [LexicalView()]
+        # fts_config is the Postgres text-search config for the BM25 lexical
+        # view AND its query side (they must match; both are stamped into the
+        # producer version). 'english' (default) applies English stemming —
+        # fine for mostly-English corpora, and non-English terms still match
+        # verbatim; a predominantly non-English corpus can pass 'simple'
+        # (no stemming, language-neutral) or a language config ('german',
+        # 'french', ...). Dense retrieval (bge-m3) is language-agnostic either
+        # way — this knob only tunes the lexical channel.
+        views: list[ViewBuilder] = [LexicalView(fts_config=fts_config)]
         if embedder is not None:
             views.append(DenseView(embedder))
         else:
@@ -129,7 +146,7 @@ class Corpus:
 
         registry = OperatorRegistry()
         registry.register(GrepOperator(store))  # every register() is gated by ConformanceSuite
-        registry.register(BM25Operator(dsn))
+        registry.register(BM25Operator(dsn, fts_config=fts_config))
         if embedder is not None:
             registry.register(ANNOperator(dsn, embedder))
 
@@ -140,13 +157,50 @@ class Corpus:
         # identical write path, CAS, and derivation as plain text. Docling is
         # lazy-imported inside the parser, so registering this costs nothing
         # until a file is actually ingested through it.
-        orchestrator.register_policy("docling", DocumentPolicy(store, parser=DoclingParser()))
+        # image_ocr adds the supplementary high-DPI full-page OCR pass
+        # (decisions.md #36) that recovers text Docling's markdown export drops
+        # from picture clusters (chart values, diagram/org-chart labels) and
+        # from raster regions Docling never classifies as pictures (a pasted
+        # facsimile). Off by default — additive, and heavier at ingest — so a
+        # text-native corpus pays nothing and nothing that ingested before can
+        # regress.
+        orchestrator.register_policy(
+            "docling",
+            DocumentPolicy(
+                store,
+                parser=DoclingParser(
+                    force_full_page_ocr=ocr_full_page,
+                    image_ocr=image_ocr,
+                    image_ocr_langs=image_ocr_langs,
+                    vision_describer=vision_describer,
+                ),
+            ),
+        )
 
-        compiler = PlanCompiler(registry, store, trace, reranker=reranker or default_reranker())
+        # The dense-similarity abstention floor is per-deployment (decisions.md
+        # #34): recall-biased default for a diverse corpus, raised for a
+        # homogeneous one. None => the policy's default. Per-namespace
+        # calibrated overrides (the OUTPUT of `datum calibrate`, decisions.md
+        # #44) are loaded here so a namespace that has EARNED tuned parameters
+        # through judged feedback gets them on every plan; all others keep the
+        # hand-declared defaults.
+        import psycopg as _psycopg
+
+        with _psycopg.connect(dsn) as _conn:
+            override_rows = _conn.execute(
+                "SELECT namespace, params FROM policy_overrides"
+            ).fetchall()
+        policy = RuleTablePolicy(
+            abstain_min_similarity=abstain_min_similarity,
+            overrides={ns: params for ns, params in override_rows},
+        )
+        compiler = PlanCompiler(
+            registry, store, trace, policy=policy, reranker=reranker or default_reranker()
+        )
         return cls(
             wal=wal, store=store, trace=trace, hits=hits, registry=registry,
             orchestrator=orchestrator, compiler=compiler, preconditions=preconditions,
-            engine=engine,
+            engine=engine, dsn=dsn,
         )
 
     def close(self) -> None:
@@ -334,6 +388,32 @@ class Corpus:
             page=page,
             score=None,
         )
+
+    def feedback(self, hit_id: str, useful: bool, *, principal: Principal) -> bool:
+        """Record a relevance judgment for a served hit (decisions.md #44):
+        the raw material of the learned relevance loop. The hit token is
+        resolved (forged ids raise), the record is looked up namespace-scoped
+        (fail closed: feedback can only ever reference a record the caller was
+        actually authorized to see), and the judgment is stored with the
+        plan_id the token carries — so every judgment stays attached to the
+        replayable retrieval that produced it. Returns False when the hit no
+        longer resolves in the caller's namespace (superseded/foreign), True
+        when recorded. `datum calibrate` consumes these rows.
+        """
+        payload = self._hits.resolve(hit_id)  # raises HitIntegrityError on a forged id
+        record = self._store.get_live(payload["content_ref"], namespace=principal.namespace)
+        if record is None or record.provenance.writer.namespace != principal.namespace:
+            return False  # fail closed across namespaces, like fetch()
+        import psycopg as _psycopg
+
+        with _psycopg.connect(self._dsn) as conn:
+            conn.execute(
+                "INSERT INTO relevance_feedback (namespace, plan_id, record_id, useful, principal_id) "
+                "VALUES (%s, %s, %s, %s, %s)",
+                (principal.namespace, payload["version"], payload["content_ref"], useful, principal.id),
+            )
+            conn.commit()
+        return True
 
     def navigate(
         self, ref: str, *, principal: Principal, depth: int | None = None

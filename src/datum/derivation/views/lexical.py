@@ -39,7 +39,7 @@ from typing import Any, Sequence
 
 import psycopg
 
-from datum.derivation.views.base import RecordRow
+from datum.derivation.views.base import RecordRow, contextual_text
 
 _TABLE_DDL = """
 CREATE TABLE IF NOT EXISTS view_lexical (
@@ -84,7 +84,10 @@ class LexicalView:
         # The config is part of the producer identity: 'english' and 'simple'
         # produce different lexemes for the same text, and a reindex after a
         # config change must be detectable per row (base.py's CI-07 note).
-        self.producer_version = f"lexical-v1/pg-tsvector-{fts_config}"
+        # v2: context-prefixed input text (contextual BM25 — the same
+        # section-path prefix the dense view embeds; see views.dense
+        # .contextual_text and decisions.md #41).
+        self.producer_version = f"lexical-v2-ctx/pg-tsvector-{fts_config}"
 
     def ensure_schema(self, conn: psycopg.Connection[Any]) -> None:
         """Create table + indexes if absent. Idempotent (IF NOT EXISTS
@@ -117,7 +120,7 @@ class LexicalView:
                     row.record.provenance.writer.namespace,
                     self.producer_version,
                     self._fts_config,
-                    row.record.body_text(),
+                    contextual_text(row.record),
                     _MAX_INDEX_CHARS,  # left(): cap indexed text so it can't overflow tsvector
                 )
                 for row in rows

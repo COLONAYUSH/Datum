@@ -39,7 +39,7 @@ from typing import Any, Protocol, Sequence
 
 import psycopg
 
-from datum.derivation.views.base import RecordRow
+from datum.derivation.views.base import RecordRow, contextual_text
 from datum.kernel.errors import DatumError
 
 
@@ -61,32 +61,52 @@ class Embedder(Protocol):
     def encode_query(self, text: str) -> list[float]: ...
 
 
-# bge models are trained with this exact instruction on the QUERY side only;
-# omitting it measurably degrades retrieval, adding it to documents does too.
-_BGE_QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
+# bge-v1.5 models are trained with this exact instruction on the QUERY side
+# only; omitting it measurably degrades retrieval, adding it to documents does
+# too. bge-m3 (the v1 default) is trained WITHOUT any instruction prefix, so
+# its config sets query_prefix="" — the prefix is per-model, not universal.
+_BGE_V15_QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
 
 
 class SentenceTransformersEmbedder:
-    """The default local embedder: bge-small-en-v1.5, 384-dim,
-    cosine-normalized, CPU-friendly. Lazy on purpose — see module docstring.
+    """Local sentence-transformers embedder, lazy-loaded (see module docstring).
+
+    Defaults to **BAAI/bge-m3** (1024-dim, multilingual over 100+ languages,
+    strong on English too). The v1 default was the English-only bge-small;
+    real multilingual stress-testing showed English-only embeddings cannot
+    retrieve Japanese/German/Russian chunks from an English query even when
+    the text extracted cleanly, so the default is now multilingual. The model
+    is parameterized so a deployment swaps to a lighter/English model, a
+    hosted API, or a stronger one in one line — the ANN operator and the whole
+    pipeline are unchanged behind the `Embedder` Protocol. `query_prefix` is
+    per-model (bge-v1.5 needs one; bge-m3 does not).
     """
 
-    name = "BAAI/bge-small-en-v1.5"
-    # Pinned lineage tag for the encoding library, not read from the installed
-    # package (that would import it at construction time). Bumping the
-    # installed sentence-transformers is expected to bump this tag, which
-    # changes producer_version and makes the reindex detectable (CI-07).
-    version = "st-5.7.0"
-    dim = 384
-
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        model_name: str = "BAAI/bge-m3",
+        *,
+        dim: int = 1024,
+        version: str = "st-5.7.0",
+        query_prefix: str = "",
+        device: str = "cpu",
+    ) -> None:
+        self.name = model_name
+        self.dim = dim
+        # Lineage tag: model name + library tag, so a model OR library change is
+        # a detectable producer-version change forcing a dense-view rebuild
+        # (CI-07). Not read from the installed package (that would import it at
+        # construction, defeating the lazy-import guarantee).
+        self.version = f"{version}/{model_name.split('/')[-1]}"
+        self._query_prefix = query_prefix
+        self._device = device
         self._model: Any = None
 
     def _load(self) -> Any:
         if self._model is None:
             from sentence_transformers import SentenceTransformer
 
-            self._model = SentenceTransformer(self.name, device="cpu")
+            self._model = SentenceTransformer(self.name, device=self._device)
         return self._model
 
     def encode_documents(self, texts: Sequence[str]) -> list[list[float]]:
@@ -94,8 +114,19 @@ class SentenceTransformersEmbedder:
         return [[float(x) for x in vec] for vec in encoded]
 
     def encode_query(self, text: str) -> list[float]:
-        encoded = self._load().encode([_BGE_QUERY_PREFIX + text], normalize_embeddings=True)
+        encoded = self._load().encode(
+            [self._query_prefix + text], normalize_embeddings=True
+        )
         return [float(x) for x in encoded[0]]
+
+
+def bge_small_en() -> "SentenceTransformersEmbedder":
+    """The former default: English-only bge-small-en-v1.5, 384-dim, with the
+    bge-v1.5 query instruction. Kept as a one-call factory for a lighter,
+    English-only deployment (or to reproduce pre-bge-m3 behavior)."""
+    return SentenceTransformersEmbedder(
+        "BAAI/bge-small-en-v1.5", dim=384, query_prefix=_BGE_V15_QUERY_PREFIX
+    )
 
 
 def vector_literal(vec: Sequence[float]) -> str:
@@ -111,7 +142,8 @@ class DenseView:
 
     def __init__(self, embedder: Embedder) -> None:
         self._embedder = embedder
-        self.producer_version = f"dense-v1/{embedder.name}@{embedder.version}"
+        # v2: context-prefixed input text (see contextual_text)
+        self.producer_version = f"dense-v2-ctx/{embedder.name}@{embedder.version}"
 
     def ensure_schema(self, conn: psycopg.Connection[Any]) -> None:
         with conn.transaction():
@@ -153,7 +185,7 @@ class DenseView:
     def derive(self, cur: psycopg.Cursor[Any], rows: Sequence[RecordRow]) -> int:
         if not rows:
             return 0
-        vectors = self._embedder.encode_documents([r.record.body_text() for r in rows])
+        vectors = self._embedder.encode_documents([contextual_text(r.record) for r in rows])
         cur.executemany(
             "INSERT INTO view_dense (row_id, record_id, namespace, producer_version, embedding) "
             "VALUES (%s, %s, %s, %s, %s::vector)",

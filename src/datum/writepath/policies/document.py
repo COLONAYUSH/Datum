@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Protocol
 
-from datum.derivation.chunking import chunk_structured_body
+from datum.derivation.chunking import chunk_table_aware
 from datum.groundstore.store import GroundStore
 from datum.kernel.ids import PolicyID
 from datum.kernel.principal import Principal
@@ -76,15 +76,24 @@ class MarkdownParser:
     source id. No table/structural-region extraction yet — the chunker
     supports protected regions (decisions.md #15), but this v1 parser emits
     none; that is a Phase 1 enrichment, flagged here rather than faked.
+
+    ATX detection is SUSPENDED inside fenced code blocks (``` or ~~~). A
+    document with code sketches — FRAMEWORK.md's Python blocks are the case
+    that surfaced this — is full of `# comment` lines that are NOT headings;
+    treating them as headings shattered `section_path` into sentence-fragment
+    "sections" and mis-anchored every citation drawn from those spans
+    (section_path is the load-bearing provenance the surface promises). Found
+    by real MCP use over real docs; decisions.md #33.
     """
 
-    version = "markdown-v1"
+    version = "markdown-v2"
 
     def parse(self, raw: DocumentInput) -> list[ParsedSection]:
         sections: list[ParsedSection] = []
         path_stack: list[str] = [raw.source_id]
         buf: list[str] = []
         current_path: tuple[str, ...] = (raw.source_id,)
+        fence_char = ""  # "" outside a code fence; "`" or "~" while inside one
 
         def flush() -> None:
             text = "\n".join(buf).strip()
@@ -93,6 +102,21 @@ class MarkdownParser:
             buf.clear()
 
         for line in raw.text.splitlines():
+            stripped = line.lstrip()
+            # A run of >=3 backticks or tildes toggles fenced-code state (a
+            # closing fence must repeat the opener's char). Fence lines and
+            # everything between them are body text, never heading candidates.
+            if stripped[:3] in ("```", "~~~"):
+                marker = stripped[0]
+                if not fence_char:
+                    fence_char = marker
+                elif marker == fence_char:
+                    fence_char = ""
+                buf.append(line)
+                continue
+            if fence_char:
+                buf.append(line)
+                continue
             m = _ATX_HEADING.match(line)
             if m is None:
                 buf.append(line)
@@ -136,7 +160,11 @@ class DocumentPolicy:
         seen_prefixes: dict[str, int] = {}
         for section in self._parser.parse(raw):
             base_body = StructuredBody(text=section.text, section_path=section.section_path)
-            chunks = chunk_structured_body(base_body, protected_regions=[])
+            # Table-aware: a section with no pipe-table chunks byte-identically
+            # to the plain FastCDC path (chunk_table_aware delegates to it); a
+            # section WITH a large table gets header-carrying row-group chunks
+            # so a specific row stays retrievable (decisions.md #37).
+            chunks = chunk_table_aware(base_body)
             path_key = "/".join(section.section_path)
             # A section_path that repeats within ONE document (e.g. two `#
             # Notes` headings, or repeated deeper sub-headings) would otherwise

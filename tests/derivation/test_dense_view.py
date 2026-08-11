@@ -169,7 +169,7 @@ def test_ensure_schema_creates_table_and_indexes_and_is_idempotent(conn):
     assert any("btree (namespace)" in d for d in index_defs)
 
     view.ensure_schema(conn)  # second run must be a no-op, not an error
-    assert view.producer_version == "dense-v1/fake-hash@v1"
+    assert view.producer_version == "dense-v2-ctx/fake-hash@v1"
 
 
 def test_ensure_schema_refuses_a_dimension_mismatch_and_touches_nothing(conn):
@@ -213,9 +213,15 @@ def test_derive_and_remove_round_trip_on_the_callers_cursor(conn):
     assert [g[1] for g in got] == [str(r.record.id) for r in rows]
     assert all(g[2] == _ACME for g in got)  # namespace from provenance.writer
     assert all(g[3] == view.producer_version for g in got)
-    # the vector survives the wire format (pgvector stores float4)
+    # the vector survives the wire format (pgvector stores float4) — and the
+    # embedded input is the CONTEXTUAL text (section path + body, decisions.md
+    # #41), never the bare body: prefix-free embedding here would silently
+    # drop the contextual-retrieval upgrade.
+    from datum.derivation.views.base import contextual_text
+
     stored = [float(x) for x in got[0][4].strip("[]").split(",")]
-    assert stored == pytest.approx(embedder._embed("alpha beta"), rel=1e-5)
+    assert stored == pytest.approx(embedder._embed(contextual_text(rows[0].record)), rel=1e-5)
+    assert stored != pytest.approx(embedder._embed("alpha beta"), rel=1e-5)
 
     with conn.transaction():
         assert view.remove(conn.cursor(), [r.row_id for r in rows]) == 2

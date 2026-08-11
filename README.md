@@ -1,19 +1,11 @@
 <!--
   Datum README.
-  LOGO: drop your generated files at docs/assets/datum-logo-dark.svg and
-  docs/assets/datum-logo-light.svg (plus datum-icon.svg for the favicon).
-  The <picture> block below already points at them, so once the files exist
-  the logo renders with no further edits.
   DYNAMIC BADGES: replace OWNER with your GitHub org/user once the repo is pushed.
 -->
 
 <div align="center">
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/datum-logo-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="docs/assets/datum-logo-light.svg">
-  <img alt="Datum" src="docs/assets/datum-logo-light.svg" width="380">
-</picture>
+<img alt="Datum — measure, understand, build" src="docs/assets/datum-logo.png" width="420">
 
 <h1>Datum</h1>
 

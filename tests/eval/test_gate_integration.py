@@ -22,7 +22,12 @@ import psycopg
 import pytest
 
 from datum.corpus import Corpus
-from datum.eval.gate import DEFAULT_CORPUS_DIR, DEFAULT_REGRESSION_SET, run_gate
+from datum.eval.gate import (
+    DEFAULT_CORPUS_DIR,
+    DEFAULT_REGRESSION_SET,
+    GATE_ABSTAIN_FLOOR,
+    run_gate,
+)
 
 _DSN = os.environ.get("DATUM_PG_DSN", "postgresql://localhost/datum")
 
@@ -48,13 +53,18 @@ pytestmark = [
 
 @pytest.fixture
 def corpus():
-    c = Corpus.open(_DSN, hit_signing_key=b"eval-gate-key")
+    # Drop view_dense BEFORE open: the embedder's vector dimension can change
+    # (bge-m3 is 1024-dim), and ensure_schema refuses a dim mismatch by design.
+    with psycopg.connect(_DSN, autocommit=True) as conn:
+        conn.execute("DROP TABLE IF EXISTS view_dense")
+    # This fixture corpus is small/homogeneous, so it uses the gate-calibrated
+    # abstention floor, not the recall-biased default (decisions.md #34).
+    c = Corpus.open(_DSN, hit_signing_key=b"eval-gate-key", abstain_min_similarity=GATE_ABSTAIN_FLOOR)
     with psycopg.connect(_DSN, autocommit=True) as conn:
         conn.execute("TRUNCATE TABLE records RESTART IDENTITY CASCADE")
         conn.execute("TRUNCATE TABLE wal_entries RESTART IDENTITY")
         conn.execute("TRUNCATE TABLE plan_traces")
         conn.execute("TRUNCATE TABLE view_cursors")
-        conn.execute("DELETE FROM view_dense")
         conn.execute("DELETE FROM view_lexical")
     yield c
     c.close()

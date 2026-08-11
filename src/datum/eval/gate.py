@@ -39,6 +39,16 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_CORPUS_DIR = _REPO_ROOT / "tests" / "fixtures" / "sample_corpus"
 DEFAULT_REGRESSION_SET = _REPO_ROOT / "tests" / "fixtures" / "regression_set.yaml"
 
+# The abstention floor CALIBRATED FOR THIS FIXTURE CORPUS (decisions.md #34).
+# The sample corpus is small and homogeneous (workplace policy docs), so its
+# genuine-match dense-cosine scale sits high (~0.53–0.75) and its
+# out-of-corpus / cross-namespace queries at ~0.33–0.50; a floor of 0.53
+# separates them. This is per-corpus calibration of a documented knob — the
+# regression-set oracle (the expected answers) is untouched — exactly the
+# per-deployment tuning the configurable floor exists for. A diverse corpus
+# uses the lower recall-biased default instead.
+GATE_ABSTAIN_FLOOR = 0.53
+
 
 def _namespace_for(path: Path) -> str:
     """The fixture convention: a file's namespace is its name prefix before

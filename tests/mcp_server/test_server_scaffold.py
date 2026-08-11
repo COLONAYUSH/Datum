@@ -38,7 +38,7 @@ from datum.security.context import bind_principal
 
 ALICE = Principal(id="alice", namespace="tenant:acme")
 
-_TOOL_NAMES = ("search", "fetch", "navigate", "explain", "since")
+_TOOL_NAMES = ("search", "fetch", "navigate", "explain", "since", "feedback")
 
 
 class FakeCorpus:
@@ -73,6 +73,11 @@ class FakeCorpus:
         self.calls.append(("since", principal))
         change = ChangeRecord(hit_id="hit-1", change_kind="created", occurred_at=datetime.now(timezone.utc))
         return ChangeSet(changes=(change,), since_marker=marker, as_of_marker="wal-42")
+
+    def feedback(self, hit_id: str, useful: bool, *, principal):
+        self.last_principal = principal
+        self.last_feedback = (hit_id, useful)
+        return True
 
 
 def test_search_returns_evidence() -> None:
@@ -122,7 +127,7 @@ def test_since_returns_change_set() -> None:
     assert result.as_of_marker == "wal-42"
 
 
-def test_all_five_tools_are_registered() -> None:
+def test_all_six_tools_are_registered() -> None:
     server = build_server(FakeCorpus())
     tools = asyncio.run(server.list_tools())
     assert {tool.name for tool in tools} == set(_TOOL_NAMES)

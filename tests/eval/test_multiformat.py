@@ -47,13 +47,14 @@ pytestmark = [
 
 @pytest.fixture
 def corpus():
+    with psycopg.connect(_DSN, autocommit=True) as conn:
+        conn.execute("DROP TABLE IF EXISTS view_dense")  # embedder dim may change (bge-m3: 1024)
     c = Corpus.open(_DSN, hit_signing_key=b"multiformat-key")
     with psycopg.connect(_DSN, autocommit=True) as conn:
         conn.execute("TRUNCATE TABLE records RESTART IDENTITY CASCADE")
         conn.execute("TRUNCATE TABLE wal_entries RESTART IDENTITY")
         conn.execute("TRUNCATE TABLE plan_traces")
         conn.execute("TRUNCATE TABLE view_cursors")
-        conn.execute("DELETE FROM view_dense")
         conn.execute("DELETE FROM view_lexical")
     yield c
     c.close()

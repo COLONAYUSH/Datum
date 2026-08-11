@@ -2,7 +2,7 @@
 not just term matches, end to end through the real Corpus.
 
 This is the checkpoint the handoff names ("semantically-relevant hits, not
-just term matches, on the sample corpus"). It uses the REAL bge-small
+just term matches, on the sample corpus"). It uses the REAL default embedder (bge-m3)
 embedder and the REAL cross-encoder reranker, so it is skipped when the
 `datum[embed]` extra is absent; a fast structural cousin
 (test_walking_skeleton) already covers the ML-free path. The single decisive
@@ -65,13 +65,16 @@ at 175 degrees for about fifty-five minutes.
 
 @pytest.fixture
 def corpus():
+    # Drop view_dense before open — the embedder's vector dim (bge-m3: 1024)
+    # can differ from an existing table, and ensure_schema refuses a mismatch.
+    with psycopg.connect(_DSN, autocommit=True) as conn:
+        conn.execute("DROP TABLE IF EXISTS view_dense")
     c = Corpus.open(_DSN, hit_signing_key=b"milestone-b-key")
     with psycopg.connect(_DSN, autocommit=True) as conn:
         conn.execute("TRUNCATE TABLE records RESTART IDENTITY CASCADE")
         conn.execute("TRUNCATE TABLE wal_entries RESTART IDENTITY")
         conn.execute("TRUNCATE TABLE plan_traces")
         conn.execute("TRUNCATE TABLE view_cursors")
-        conn.execute("DELETE FROM view_dense")
         conn.execute("DELETE FROM view_lexical")
     yield c
     c.close()

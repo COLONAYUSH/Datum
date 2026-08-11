@@ -78,6 +78,8 @@ class CorpusLike(Protocol):
 
     def since(self, marker: str, *, principal: Principal) -> ChangeSet: ...
 
+    def feedback(self, hit_id: str, useful: bool, *, principal: Principal) -> bool: ...
+
 
 def build_tools(corpus: CorpusLike) -> dict[str, Callable[..., object]]:
     """Build the five tool functions, each a closure over `corpus`, keyed by
@@ -158,12 +160,30 @@ def build_tools(corpus: CorpusLike) -> dict[str, Callable[..., object]]:
         """
         return corpus.since(marker, principal=current_principal())
 
+    def feedback(hit_id: str, useful: bool) -> dict:
+        """Record whether a previously returned hit was actually useful for
+        the question being answered. This is how retrieval improves for this
+        corpus over time: judgments accumulate per namespace, and a
+        promotion-gated calibration (`datum calibrate`) tunes the retrieval
+        policy only when the accumulated judgments prove a better setting on
+        held-out data. Call it when a hit clearly answered the question
+        (useful=true) or clearly wasted the context window (useful=false);
+        skip it when unsure.
+
+        Args:
+            hit_id: An opaque reference returned by an earlier `search` call.
+            useful: true if the hit answered the need; false if irrelevant.
+        """
+        recorded = corpus.feedback(hit_id, useful, principal=current_principal())
+        return {"recorded": recorded}
+
     return {
         "search": search,
         "fetch": fetch,
         "navigate": navigate,
         "explain": explain,
         "since": since,
+        "feedback": feedback,
     }
 
 

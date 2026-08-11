@@ -47,7 +47,8 @@ pytestmark = pytest.mark.skipif(
 )
 
 # One shared record pool so operators can rank overlapping candidates.
-_RECORDS = {rid: make_record(rid, namespace=_ACME) for rid in ("r1", "r2", "r3", "r4")}
+_RECORDS = {rid: make_record(rid, namespace=_ACME) for rid in
+            ("r1", "r2", "r3", "r4", "r5", "r6", "r7")}
 
 
 class CannedOperator:
@@ -287,7 +288,7 @@ def test_agreement_raises_sufficiency_for_multi_operator_consensus(trace_store):
     assert ev_both.sufficiency <= 0.9  # the uncalibrated cap holds
 
 
-def test_rerank_slot_cuts_to_depth_and_appears_in_explain(trace_store):
+def test_rerank_slot_reorders_and_appears_in_explain(trace_store):
     fusion = Fusion(
         operator_kinds=("opa", "opb"),
         fusion_weights={"opa": 1.0, "opb": 1.0},
@@ -299,8 +300,48 @@ def test_rerank_slot_cuts_to_depth_and_appears_in_explain(trace_store):
     explain = plan.explain()
     assert "rerank" in explain and "reversing-test-reranker@v1" in explain
     evidence = plan.execute()
-    # Fused order was r1, r3, r2; depth-2 head (r1, r3) reversed -> (r3, r1).
-    assert [str(i.record_id) for i in evidence.items] == ["r3", "r1"]
+    # Fused order is r1, r3, r2. The rerank pool is the fused top-2 UNIONED
+    # with each operator's own top-2 (decisions.md #38): opa's own top-2 is
+    # (r1, r2), which adds r2 — a plain fused-top-2 cut (r1, r3) would have
+    # dropped it. With only 3 distinct records total here the union happens
+    # to cover all of them; see the next test for a fixture where the cut
+    # is actually visible. ReversingReranker reverses the whole pool:
+    # (r1, r3, r2) -> (r2, r3, r1).
+    assert [str(i.record_id) for i in evidence.items] == ["r2", "r3", "r1"]
+
+
+def test_rerank_pool_guarantees_each_operators_top_pick_reaches_rerank(trace_store):
+    # decisions.md #38: naive fused-top-depth truncation lets a candidate
+    # several operators mildly agree on outrank a candidate only ONE operator
+    # ranks highly — even at that operator's #1 position — because RRF sums
+    # contributions across operators. opa ranks r1/r2/r3 #1-#3, but opb
+    # agrees with opa on r6/r7, so fused order is r7, r6, r1, r2, r3, r4, r5
+    # (verified numerically). A depth=2 cut on the fused order ALONE would
+    # only ever see {r7, r6} — r1/r2/r3 could never reach the reranker no
+    # matter how relevant they are.
+    registry = OperatorRegistry()
+    registry.register(CannedOperator("opa", ("r1", "r2", "r3", "r4", "r5", "r6", "r7")))
+    registry.register(CannedOperator("opb", ("r7", "r6")))
+    fusion = Fusion(
+        operator_kinds=("opa", "opb"), fusion_weights={"opa": 1.0, "opb": 1.0}, rerank_depth=2
+    )
+    plan = PlanCompiler(
+        registry, store=None, trace_store=trace_store,  # type: ignore[arg-type]
+        policy=StaticPolicy(fusion), reranker=ReversingReranker(),
+    ).compile("q", _principal())
+    evidence = plan.execute()
+    ids = {str(i.record_id) for i in evidence.items}
+    # Pool = fused top-2 (r7, r6) UNION opa's own top-3 (r1, r2, r3) UNION
+    # opb's own top-3 (r7, r6 — already present, only 2 total). r1/r2/r3 now
+    # reach the reranker despite being fused-rank 2, 3, 4.
+    assert ids == {"r7", "r6", "r1", "r2", "r3"}
+    # Still a real, bounded cut — not "give up and rerank everything": r4/r5
+    # are opa's rank-3/4 picks (outside its own top-3) and never appear in
+    # any operator's top-3, so they are correctly excluded from the pool.
+    # (The coverage guarantee is deliberately narrow — top-3, not top-depth —
+    # because widening it measurably regressed an unrelated query in the
+    # real corpus; see `_COVERAGE_TOP_N`'s docstring.)
+    assert "r4" not in ids and "r5" not in ids
 
 
 def test_identity_reranker_means_no_rerank_step(trace_store):

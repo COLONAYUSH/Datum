@@ -47,9 +47,24 @@ from __future__ import annotations
 
 import hashlib
 import math
+import re
 from bisect import bisect_left, bisect_right
 
 from datum.kernel.record import Span, StructuredBody
+
+# A markdown pipe-table separator row: only pipes, dashes, colons, spaces, and
+# at least one dash (e.g. `|------|:----:|`). Distinguishes a real table (whose
+# second line is a separator) from prose that merely contains `|`.
+_TABLE_SEPARATOR = re.compile(r"^\s*\|[\s:|-]*-[\s:|-]*\|\s*$")
+
+
+def _is_table_row(line: str) -> bool:
+    s = line.strip()
+    return s.startswith("|") and s.count("|") >= 2
+
+
+def _is_table_separator(line: str) -> bool:
+    return bool(_TABLE_SEPARATOR.match(line))
 
 
 def _build_gear_table() -> tuple[int, ...]:
@@ -355,3 +370,135 @@ def chunk_structured_body(
         prev_byte = cut_byte
 
     return chunks
+
+
+def _find_table_blocks(lines: list[str]) -> list[tuple[int, int]]:
+    """Line-index spans `[start, end)` of markdown pipe-tables: a run of table
+    rows whose SECOND line is a separator (so pipe-bearing prose is not
+    mistaken for a table). Non-overlapping, in order."""
+    blocks: list[tuple[int, int]] = []
+    i = 0
+    n = len(lines)
+    while i < n:
+        if _is_table_row(lines[i]) and i + 1 < n and _is_table_separator(lines[i + 1]):
+            j = i
+            while j < n and _is_table_row(lines[j]):
+                j += 1
+            blocks.append((i, j))
+            i = j
+        else:
+            i += 1
+    return blocks
+
+
+def chunk_table_aware(
+    body: StructuredBody,
+    min_size: int = 256,
+    avg_size: int = 1024,
+    max_size: int = 4096,
+) -> list[StructuredBody]:
+    """Table-aware layer over `chunk_structured_body` (decisions.md #37).
+
+    A large markdown table sliced by plain FastCDC becomes header-less row
+    slabs: the specific row a query wants (e.g. dive `D-2025-018`) lands in a
+    chunk that carries neither the column names the query uses ("pilot", "max
+    depth", "duration") nor enough focus to embed as a unit, so it does not
+    rank — measured on the stress corpus (Q07). This layer splits each real
+    pipe-table into ROW-GROUPS, each re-prefixed with the table's header +
+    separator, so every group is a small, self-describing, retrievable chunk.
+
+    Prose is untouched: it is delegated to `chunk_structured_body` (the tested
+    FastCDC core, shift-invariance and all). Crucially, a body with NO table
+    is returned by exactly that call, byte-for-byte — so every existing
+    document re-chunks identically and nothing that ingested before regresses.
+    Only sections that actually contain a pipe-table see new behavior, and
+    there only the table region changes; the prose around it still flows
+    through CDC.
+
+    Group sizing is by CHARACTER BUDGET, not a tuned row count: rows are packed
+    into a group until adding the next would push the group (header + separator
+    + rows) past `avg_size`, so groups embed as focused units regardless of how
+    wide a given table's rows are (a single row wider than `avg_size` stands
+    alone, the same accepted cost a too-wide protected region has in
+    `chunk_structured_body`). Each group's `span` is the whole table block's
+    document range (they all trace to that table); text is not a contiguous
+    document substring because the header is re-prefixed, which is why a single
+    shared block span — not a per-group slice — is the honest provenance.
+    """
+    _validate_sizes(min_size, avg_size, max_size)
+    text = body.text
+    lines = text.split("\n")
+    blocks = _find_table_blocks(lines)
+    if not blocks:
+        # No table: exact legacy path, byte-identical output.
+        return chunk_structured_body(body, [], min_size, avg_size, max_size)
+
+    # Char offset where each line starts (line i occupies text[offsets[i]:...]).
+    offsets: list[int] = []
+    pos = 0
+    for ln in lines:
+        offsets.append(pos)
+        pos += len(ln) + 1  # +1 for the "\n" join char
+    parent_start = body.span.start if body.span is not None else 0
+
+    def prose_chunks(start_char: int, end_char: int) -> list[StructuredBody]:
+        sub_text = text[start_char:end_char]
+        if not sub_text.strip():
+            return []
+        sub = StructuredBody(
+            text=sub_text,
+            section_path=body.section_path,
+            page=body.page,
+            bbox=body.bbox,
+            span=Span(parent_start + start_char, parent_start + end_char),
+        )
+        return chunk_structured_body(sub, [], min_size, avg_size, max_size)
+
+    def row_groups(header: str, separator: str, data: list[str], span: Span) -> list[StructuredBody]:
+        base_len = len(header) + len(separator) + 2  # + two join newlines
+        out: list[StructuredBody] = []
+        group: list[str] = []
+        group_len = base_len
+        for rowtext in data:
+            add = len(rowtext) + 1
+            if group and group_len + add > avg_size:
+                out.append(_table_chunk(header, separator, group, body, span))
+                group, group_len = [], base_len
+            group.append(rowtext)
+            group_len += add
+        if group:
+            out.append(_table_chunk(header, separator, group, body, span))
+        return out
+
+    chunks: list[StructuredBody] = []
+    prose_start = 0
+    for start, end in blocks:
+        chunks.extend(prose_chunks(prose_start, offsets[start]))
+        header, separator = lines[start], lines[start + 1]
+        data = [
+            ln
+            for ln in lines[start + 2 : end]
+            if ln.strip() and ln != header and not _is_table_separator(ln)
+        ]
+        block_end_char = offsets[end] if end < len(lines) else len(text)
+        span = Span(parent_start + offsets[start], parent_start + block_end_char)
+        if data:
+            chunks.extend(row_groups(header, separator, data, span))
+        prose_start = block_end_char
+    chunks.extend(prose_chunks(prose_start, len(text)))
+
+    if not chunks:
+        return chunk_structured_body(body, [], min_size, avg_size, max_size)
+    return chunks
+
+
+def _table_chunk(
+    header: str, separator: str, rows: list[str], body: StructuredBody, span: Span
+) -> StructuredBody:
+    return StructuredBody(
+        text="\n".join([header, separator, *rows]),
+        section_path=body.section_path,
+        page=body.page,
+        bbox=body.bbox,
+        span=span,
+    )

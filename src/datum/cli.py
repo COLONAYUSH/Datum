@@ -141,9 +141,14 @@ def eval(corpus_dir: Path | None, regression_set: Path | None, dsn: str) -> None
     TEST-SAFETY discipline the suite follows).
     """
     from datum import Corpus
-    from datum.eval.gate import DEFAULT_CORPUS_DIR, DEFAULT_REGRESSION_SET, run_gate
+    from datum.eval.gate import (
+        DEFAULT_CORPUS_DIR,
+        DEFAULT_REGRESSION_SET,
+        GATE_ABSTAIN_FLOOR,
+        run_gate,
+    )
 
-    corpus = Corpus.open(dsn)
+    corpus = Corpus.open(dsn, abstain_min_similarity=GATE_ABSTAIN_FLOOR)
     try:
         report = run_gate(
             corpus,
@@ -195,3 +200,26 @@ def benchmark(dsn: str) -> None:
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+@main.command()
+@click.option("--namespace", required=True, help="Namespace whose feedback to calibrate on.")
+@click.option("--dsn", default=_DEFAULT_DSN, help="Postgres DSN.")
+def calibrate(namespace: str, dsn: str) -> None:
+    """Tune this namespace's retrieval policy from accumulated relevance
+    feedback (the `feedback` MCP verb / Corpus.feedback). Promotion-gated:
+    the tuned parameters take effect ONLY if they beat the current policy on
+    held-out judgments; otherwise nothing changes and the reason is printed.
+    """
+    from datum.corpus import Corpus
+    from datum.eval.calibrate import run_calibration
+
+    with Corpus.open(dsn) as corpus:
+        result = run_calibration(corpus, namespace)
+    click.echo(f"judged queries: {result.n_queries}")
+    if result.params:
+        click.echo(f"best params (train MRR {result.train_mrr:.4f}): {result.params}")
+        click.echo(
+            f"holdout MRR {result.holdout_mrr:.4f} vs current {result.baseline_holdout_mrr:.4f}"
+        )
+    click.echo(("PROMOTED — " if result.promoted else "NOT promoted — ") + result.reason)

@@ -5,15 +5,20 @@ compiler applies the configured Reranker to the fused candidate set. Like
 plan selection itself, WHICH reranker runs is a versioned slot the trace
 records (`name@version` in the rerank PlanStep), not a hard-coded choice.
 
-Semantics when a real reranker is active (recorded as decisions.md #22): the
-reranker re-scores the top `depth` fused candidates and its output IS the
-final candidate set — candidates past the declared depth are cut, not
-carried with incomparable scores. CandidateSet's own contract ("scores ...
-NOT assumed comparable across operators; declared, never silently mixed")
-forbids the tempting alternative of stitching cross-encoder scores onto the
-head and RRF scores onto the tail of one set. The cut is visible: depth is
-declared in the dated rule table and shown in the plan's EXPLAIN before
-execution.
+Semantics when a real reranker is active (recorded as decisions.md #22,
+revised #38): the reranker re-scores a POOL — the fused top-`depth`
+candidates UNIONED with each operator's own top-`depth` ranking
+(`compiler._build_rerank_pool`) — and its output IS the final candidate set;
+whatever isn't in the pool is cut, not carried with incomparable scores.
+CandidateSet's own contract ("scores ... NOT assumed comparable across
+operators; declared, never silently mixed") forbids the tempting alternative
+of stitching cross-encoder scores onto the head and RRF scores onto the tail
+of one set. `depth` is therefore a PER-SOURCE cap, not a single global cut —
+the actual pool size varies with how much the sources overlap — because a
+plain fused-order cut lets a candidate several operators mildly agree on
+outrank a candidate only one operator ranked #1 (decisions.md #38). The cap
+is visible: `depth` is declared in the dated rule table and shown in the
+plan's EXPLAIN before execution.
 
 `IdentityReranker` is the wired-but-empty slot: it returns the fused set
 untouched, so deployments without the ML extras run the identical pipeline
@@ -29,7 +34,17 @@ from typing import Protocol
 from datum.kernel.errors import DatumError
 from datum.kernel.operator import CandidateSet
 
-_DEFAULT_MODEL = "BAAI/bge-reranker-base"
+# The default reranker MATCHES the default embedder's multilinguality
+# (bge-m3 -> bge-reranker-v2-m3, decisions.md #39): a multilingual dense
+# stage feeding an English-centric cross-encoder un-ranks exactly the chunks
+# the embedder was upgraded to find. Measured on stress corpus #2: the Tamil
+# statement was ANN's rank-0 candidate and reached the rerank pool, but
+# bge-reranker-base scored it 0.002 (vs 0.80 that v2-m3 gives the same
+# pair's Arabic analogue) and it lost the top-k to topical-English
+# distractors. CPU cost is fine (~35 ms/pair, ~0.7 s per query pool). An
+# English-only deployment that prefers the lighter model passes
+# CrossEncoderReranker("BAAI/bge-reranker-base") to Corpus.open.
+_DEFAULT_MODEL = "BAAI/bge-reranker-v2-m3"
 
 
 class Reranker(Protocol):

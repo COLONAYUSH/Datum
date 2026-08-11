@@ -55,11 +55,77 @@ _RRF_K = 60  # Cormack et al.'s conventional damping constant, declared not tune
 @dataclass(frozen=True)
 class _Context:
     available_operator_kinds: tuple[str, ...]
+    namespace: str = ""  # lets the policy apply per-namespace calibrated overrides
 
 
 def _plan_id(query: str, principal: Principal, now: datetime) -> str:
     seed = f"{query}\x00{principal.id}\x00{principal.namespace}\x00{now.isoformat()}"
     return "pl_" + hashlib.sha256(seed.encode("utf-8")).hexdigest()[:20]
+
+
+#: How many of an operator's OWN top picks are guaranteed a place in the
+#: rerank pool regardless of fused rank (decisions.md #38). Deliberately
+#: MUCH smaller than `rerank_depth`: the defect this closes is a #1 pick
+#: buried by cross-operator RRF summing, so guaranteeing just the top few
+#: closes it without flooding the pool with extra competitors. Measured, not
+#: assumed — tested against the real stress corpus: depth-sized coverage
+#: (adding each operator's own top-16) fixed the targeted case but ALSO
+#: pushed an unrelated, previously-correct hit (a chart-value figure) out of
+#: the final top-5, a real regression traded for a real win. Coverage of 3
+#: fixed the targeted case with zero regressions on the full 42-question
+#: two-way diff.
+_COVERAGE_TOP_N = 3
+
+
+def _build_rerank_pool(
+    ordered: list[str],
+    per_op: dict[str, tuple[str, ...]],
+    record_by_id: dict[str, object],
+    rrf: dict[str, float],
+    depth: int,
+    path_glob: str | None,
+) -> CandidateSet:
+    """The candidate pool fed to rerank: the fused top-`depth` UNIONED with
+    each operator's OWN top-`_COVERAGE_TOP_N` ranking (decisions.md #38).
+
+    Plain fused-order truncation lets a candidate several operators agree on
+    (each contributing a modest RRF term) outrank a candidate only ONE
+    operator found — even when that operator ranked it #1 — because RRF sums
+    contributions across operators. Proven on the stress corpus: a record was
+    ANN's rank-0 pick yet fused-rank 37, past a depth-16 fused cut, so the
+    cross-encoder never got a chance to judge it on its actual content. This
+    guarantees every operator's own top few picks always reach the reranker,
+    regardless of how cross-operator RRF summing ranks them — the reranker
+    still makes the final call by re-scoring the whole pool. The guarantee is
+    deliberately narrow (top-`_COVERAGE_TOP_N`, not top-`depth`): widening it
+    adds more candidates competing for the final top-k, which measurably
+    pushed an unrelated correct hit out of range (see the constant's
+    docstring) — the guarantee trades pool size for coverage, so it stays as
+    small as the proven defect requires.
+
+    `path_glob` is re-applied here (an operator's raw ranking, unlike
+    `ordered`, has not been source-filtered yet) so a caller's narrowing is
+    never bypassed by the coverage guarantee.
+    """
+    seen: set[str] = set()
+    pool_ids: list[str] = []
+    for rid in ordered[:depth]:
+        if rid not in seen:
+            seen.add(rid)
+            pool_ids.append(rid)
+    for ranking in per_op.values():
+        for rid in ranking[:_COVERAGE_TOP_N]:
+            if rid in seen:
+                continue
+            if path_glob is not None and not _source_matches(record_by_id[rid], path_glob):
+                continue
+            seen.add(rid)
+            pool_ids.append(rid)
+    return CandidateSet(
+        records=tuple(record_by_id[rid] for rid in pool_ids),
+        scores=tuple(rrf.get(rid, 0.0) for rid in pool_ids),
+        score_method="rrf-v1",
+    )
 
 
 def _source_matches(record: object, path_glob: str) -> bool:
@@ -105,7 +171,7 @@ class PlanCompiler:
         now = datetime.now(timezone.utc)
         plan_id = _plan_id(query, principal, now)
 
-        fusion = self._policy.select(_Context(self._registry.kinds()))
+        fusion = self._policy.select(_Context(self._registry.kinds(), principal.namespace))
         # rough token->hit budget, floored at 1: a tiny tokens_max (1..79)
         # used to floor-divide to a LIMIT 0 that returned nothing and reported
         # insufficient_evidence as if the corpus were empty (review finding
@@ -328,7 +394,8 @@ class PlanCompiler:
 
         candidates = fused
         if rerank_active and fused.records:
-            candidates = self._reranker.rerank(query, fused, fusion.rerank_depth)
+            pool = _build_rerank_pool(ordered, per_op, record_by_id, rrf, fusion.rerank_depth, path_glob)
+            candidates = self._reranker.rerank(query, pool, len(pool.records))
             by_stage["rerank"] = 0.0  # local compute; no billed tokens at v1
 
         cost = CostTrace(

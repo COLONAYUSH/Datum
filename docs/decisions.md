@@ -15,7 +15,9 @@ record, or schedule the outcomes of the two Milestone B adversarial reviews —
 24–26 tenancy, 27 the deferred audit-trace gap, 28 score-contract/robustness);
 29–30 during Milestone C (29 the abstention floor the eval gate surfaced; 30
 the now-implemented unconditional audit trail that #27 deferred); 31 the
-multi-format DoclingParser (task #30) and its environment-honest benchmark.
+multi-format DoclingParser (task #30) and its environment-honest benchmark;
+32 the Milestone D end-to-end MCP acceptance over the real transport; 33 the
+MarkdownParser code-fence heading fix that Milestone D dogfooding surfaced; 34 the bge-m3 default embedder + per-deployment abstention floor from the PDF stress test; 35 the ocrmac OCR default (its picture-text/VLM-frontier conclusion later CORRECTED by 36); 36 the image-OCR composition that recovers picture/chart/facsimile/Devanagari text Docling's markdown export drops; 37 table-aware chunking (header-carrying row-groups) for large paginated tables; 38 the rerank-pool coverage guarantee that closes an RRF fusion blind spot, and the honest diagnosis of the remaining Docling heading-detection gap it does NOT fix; 39 stress test #2 (unseen document): script families (Arabic/Tamil), the embedded-image-object pass, per-crop plurality arbitration, PDF metadata ingestion, and the bge-reranker-v2-m3 default that matches the multilingual embedder; 40 the 20-family multilingual roster (readback-verified, 18 strong + 2 weak) with the sparse-gate + noise-floor that keep a broad default hallucination-free; 41 LLM-free contextual retrieval (section-path-prefixed view inputs) + the labeled NLLB ingest gloss — doc-2 44/44; 42 the first public-benchmark validation (BEIR SciFact nDCG@10 = 0.697 — above BM25/ColBERTv2, at SPLADE++ level, zero-shot through the full governed pipeline); 43 the VisionDescriber slot (pluggable picture understanding, provenance-labeled; local small VLMs measured unusable — the slot is the enterprise value); 44 the relevance-feedback loop (signed-token judgments, promotion-gated calibration, per-namespace overrides visible in EXPLAIN).
 
 ## 1. `WriteOp` is a value type, not an executor Protocol
 
@@ -617,3 +619,544 @@ skipped-with-reason, NOT quietly omitted:
     so a fabricated-content audio case would be worse than none.
 This is an environment limit on the BENCHMARK's coverage, not a limit of the
 parser, and the skipped list makes the boundary explicit at run time.
+
+## 32. Milestone D driven end-to-end over the real MCP transport (LLM-in-the-loop is the one human step)
+
+The plan's final acceptance is "the Agent Tool Surface tested against a real
+tool-calling model." The substantive, self-drivable core of that is realized
+as `tests/mcp_server/test_serve_e2e.py`: a real `datum serve` SUBPROCESS (its
+own process, its own `Corpus`, the actual bge embedder + cross-encoder), a
+real `mcp.client` `ClientSession` over the real stdio JSON-RPC transport, the
+`initialize` handshake, `list_tools` (exactly the five verbs), and every verb
+called and decoded off the wire — search -> fetch(hit_id) -> explain(plan_id),
+navigate, since — plus a second server bound to a different tenant proving
+namespace fail-closed THROUGH the transport (resolved from the session
+principal, never a tool argument). Confirmed on the way in: the kernel
+dataclasses (`Evidence`, `SearchHit`, `StructureView`, `ChangeSet`) serialize
+cleanly to MCP `structured_content` with no adapter — a real risk this test
+existed to catch, since they are stdlib dataclasses, not pydantic models.
+
+The ONE part not covered headlessly is a live LLM autonomously *deciding* to
+call the verbs; the test emits exactly the tool calls such a model would, so
+only the decision is stubbed, and this is stated plainly rather than claimed
+as full model-in-the-loop coverage. The final human step (point an MCP
+Code/Desktop MCP client at `datum serve` and use it) is documented in HANDOFF
+§15 with a ready client config. This is the honest boundary between what a
+headless build can prove and what needs a person with a GUI client attached.
+
+## 33. MarkdownParser suspends heading detection inside fenced code blocks
+
+Found by real MCP use (Milestone D dogfooding): `navigate` over FRAMEWORK.md
+returned 11 sentence-fragment "sections" like "honest default per stance-
+conflict resolution #4, not a placeholder." The cause — the ATX regex
+`^#{1,6}\s+` matched Python `# comment` lines inside the doc's 17 ``` code
+fences, so each comment became a heading and re-rooted the tree. This is not
+cosmetic: `section_path` is the provenance the surface promises ("a citation
+points at where an answer actually lives"), so a hallucinated heading anchors
+a hit to a location that does not exist, and it happens in the parse layer
+UPSTREAM of everything the conformance gate checks.
+
+Fix: `MarkdownParser` tracks fenced-code state (a >=3 run of backticks or
+tildes toggles it; a closing fence repeats the opener's char) and treats
+every line inside a fence — and the fence lines themselves — as body, never a
+heading candidate. Parser `version` bumped `markdown-v1` -> `markdown-v2` (the
+CI-07 lineage tuple: a re-parse under the new logic is a detectable producer
+change). Regression tests in `tests/writepath/test_markdown_parser.py` cover
+`#`-comments in ``` and ~~~ fences, indented fences, and an unclosed fence
+failing safe. The DoclingParser (decision #31) delegates to MarkdownParser,
+so its output benefits from the same fix. Left as documented v1 behavior, not
+changed here: `navigate`'s `depth` argument is advisory (the real reviewer
+also noticed depth=1 did not prune) — deeper structural nesting is the Phase-1
+enrichment the navigate docstring already names.
+
+## 34. Default embedder is bge-m3 (multilingual); the abstention floor is per-deployment
+
+Two coupled changes from the real-PDF stress test (a 19-page multilingual
+report with 42 graded questions), both replacing v1 defaults that real content
+showed were wrong.
+
+(a) **Default embedder: BAAI/bge-small-en-v1.5 -> BAAI/bge-m3.** The stress
+test's Japanese/German/Russian facts extracted cleanly but were unretrievable
+by an English query — an English-only embedder cannot place a cross-lingual
+query near a non-English passage. bge-m3 (1024-dim, 100+ languages, strong on
+English too) fixed the multilingual bucket AND lifted overall retrieval
+ranking (stress: 25 -> 30 of 42 on strict retrieval scoring). `Embedder` is a
+Protocol and `SentenceTransformersEmbedder` is now parameterized
+(model/dim/query-prefix), so the swap is one line and a deployment can still
+choose the lighter English `bge_small_en()` or a hosted model. bge-m3 uses no
+query-instruction prefix (bge-v1.5 did).
+
+(b) **The abstention floor (#29) is now a per-deployment parameter, default
+0.44, not one global 0.63 constant.** The stress test proved a single global
+dense-cosine floor CANNOT work: absolute cosine SCALE is corpus-dependent
+(the diverse report's genuine matches sit ~0.44-0.55; the small homogeneous
+eval corpus's sit ~0.53-0.75), and no single threshold separates both — one
+corpus's floor wrongly abstains the other's real answers. Measured
+confirmation that cheaper "corpus-independent" signals also fail to separate:
+the cross-encoder reranker scores weak-but-correct and off-topic BOTH ~0.50
+(only slam-dunks reach ~0.71); the top1-vs-mean "peak" is non-discriminating
+(an out-of-corpus query can have a sharper peak than an in-corpus one); and a
+genuine inversion exists (a fact PRESENT but not semantically salient — a URL
+on a cover page, 0.44 — scores below a topically-related but answer-absent
+passage, 0.46). So abstention is set per corpus: `Corpus.open(
+abstain_min_similarity=...)` overrides the recall-biased 0.44 default (the
+eval gate uses 0.53 for its homogeneous corpus, `eval.gate.GATE_ABSTAIN_FLOOR`
+— per-corpus calibration of a documented knob, the regression oracle
+untouched). Recall bias is deliberate: for a substrate feeding an LLM, a false
+abstention (refusing when the answer is present) is worse than returning weak
+evidence the model can judge. Auto-deriving the floor from each namespace's
+own similarity distribution is the Phase-1 replacement for hand-setting it.
+
+## 35. OCR is ocrmac (multilingual, region-based) by default; picture-embedded text needs a VLM
+
+> **CORRECTED by #36 (2026-08-10).** Two conclusions below were FALSIFIED by
+> later measurement: "picture-embedded text needs a VLM" and "Hindi image OCR
+> is a genuine platform limit." Both were artifacts of *how the text was being
+> read*, not real limits. Picture/chart/diagram text and the Hindi facsimile
+> are ALL recoverable with OCR (Apple Vision for the picture labels and chart
+> values, EasyOCR for Devanagari) — the true blocker was that Docling's
+> `export_to_markdown()` DROPS the text of layout-detected Picture clusters
+> (proven: those tokens are in `export_to_dict()` yet absent from the markdown).
+> The one still-true observation here — blanket full-page OCR degrades the
+> clean text layer — is exactly why #36's fix is a *composition*, not a
+> full-page pass. Read #36 for what shipped.
+
+From the PDF stress test's vision questions. The DoclingParser now configures
+Docling's OCR to **ocrmac** (Apple Vision) on macOS with a multilingual
+recognition set, region-based (not full-page) so a digital PDF's clean text
+layer is kept and OCR is applied only to image regions lacking text. Two
+measured findings shaped this:
+
+- **Language codes are validated against the installed Vision version.** An
+  unsupported code does not raise — it is filtered out. This was learned the
+  hard way: an unsupported `hi-IN` in the requested list made Docling raise
+  mid-convert and silently cut a 48-record parse to 13. macOS Vision here has
+  no Devanagari, so **Hindi image OCR (stress Q27) is a genuine platform
+  limit**, honestly reported, not a Datum bug.
+- **Full-page OCR is an opt-in, not the default, because it measurably did NOT
+  help.** Tested on the stress PDF: `force_full_page_ocr=True` did not recover
+  the diagram/org-chart labels (Module E, the Chief Engineer name — still
+  absent) AND degraded the clean text layer (40.2k chars -> 36.9k). Apple
+  Vision cannot read those stylized/vector picture labels at all, and OCRing
+  the whole page loses more (good text) than it gains (nothing here). So
+  text embedded in PICTURE regions (diagrams, org charts) and DATA locked in
+  chart pixels (a bar's height, a line's annotation) are the honest frontier:
+  they need a vision-language model that DESCRIBES pictures (Docling's SmolVLM/
+  granite-docling pipeline), which is the scheduled next step, not OCR.
+  `force_full_page_ocr` stays exposed for corpora where it does help.
+
+## 36. Image-embedded text IS recoverable with OCR — Docling's markdown export drops it; recover via a region+facsimile+devanagari composition (`image_ocr=True`)
+
+The vision limits recorded in #35 turned out to be false, and finding the true
+cause changed the fix from "wait for a VLM" to "a few hundred lines of OCR
+plumbing." The stress test's picture questions — chart-bar values (Q11 149,
+Q12 2.4), diagram/org-chart labels (Q38 Module E, Q39 the Chief Engineer's
+name), the Habitat berth count (Q42), the page-13 facsimile sounding sheet
+(Q29) — are ALL recovered now. Stress score **30/42 → 36/42, zero regressions**
+(two-way per-question diff, every win attributed to the recovered chunk, all
+four contradiction traps still both-surfaced).
+
+**Root cause (measured, not inferred).** Rendering resolution was never the
+problem: `OcrMacOptions.scale` already defaults to 3.0, and full-page OCR at
+scale 4 still produced no picture text in the markdown. The mechanism is that
+Docling reads the picture-region text into its document model but
+`export_to_markdown()` DROPS it — the text cells of a layout-detected Picture
+cluster are emitted as a bare `<!-- image -->`. Proof: for every target token,
+`in_docmodel=1 / in_markdown=0`. So no OCR tuning through Docling could ever
+recover it; the text has to be pulled a different way. (And Hindi is not a
+platform limit either — macOS Vision lacks Devanagari, but EasyOCR reads it
+perfectly at high DPI. #35's Devanagari claim is retracted.)
+
+**Why a COMPOSITION, not a full-page pass.** The first version OCR'd every page
+whole and appended it. Measured result: it BACKFIRED. Re-capturing the clean
+text layer (a) displaced clean chunks — a URL question (Q41) that passed at
+baseline dropped out of top-k, a real regression — and (b) diluted specific
+facts inside whole-page blobs (the Hindi sentence stopped surfacing). So
+`image_ocr` adds OCR text ONLY where the clean layer offers nothing:
+- **REGION** — each layout-detected Picture is cropped at high DPI (scale 4,
+  ≈288 DPI; Docling picture bboxes are BOTTOMLEFT-origin — flip before
+  cropping) and OCR'd with Apple Vision. Recovers chart values + diagram/
+  org-chart labels. No body text.
+- **FACSIMILE** — a page whose embedded text layer is < `_FACSIMILE_TEXT_LAYER_MAX`
+  (150 chars) is a scan/paste with nothing to duplicate, so its whole page is
+  OCR'd. Measured, not tuned: the one facsimile page had 0 chars, the next
+  digital page 328 — any constant in that gap classifies identically.
+- **DEVANAGARI** — on ordinary digital pages, only lines that are majority
+  Devanagari script (≥ 8 letters AND ≥ 0.6 of the line) are kept, from EasyOCR
+  (Vision can't read the script). A script-identity filter, so it cannot delete
+  a chart's "149"/"2.4", and the count+fraction bounds drop EasyOCR's two
+  false-Devanagari modes (long mostly-Latin misreads; tiny 2–4-glyph garbage).
+
+Additive and OFF by default (`Corpus.open(image_ocr=True)`), so a text-native
+corpus and the whole existing suite pay nothing and cannot regress; the clean
+region-mode Docling markdown is never touched. Output is appended under a
+`# Image OCR` anchor (fenced, so stray OCR '#'/'|' can't forge headings/tables)
+with per-figure/per-page provenance in the section path. **Cost, stated because
+§11 forbids silent downscope:** when a Devanagari language is requested the
+Devanagari sweep runs EasyOCR (CPU) on every digital page — ≈6 min for the
+19-page stress PDF. One-time, at ingest.
+
+**Honest remaining non-wins, correctly attributed:** Q07/Q28 are large-table
+specific-row lookups (extraction is fine; the row lands outside top-k — that is
+task #17 table-aware chunking, untouched here). Q24/Q25/Q26 and **Q27** are
+RETRIEVAL, not extraction: the content (incl. the Hindi sentence, confirmed a
+live record) is in the corpus but an English query does not rank the
+cross-lingual / specific chunk into top-k. Auto-derived per-namespace ranking /
+a cross-lingual reranker is the lever there, not more OCR. Q42's "which figure
+must NOT be used" is an adversarial provenance meta-question; the diagram chunk
+now surfaces, and how the answer is used is the LLM's call, not the retriever's.
+
+## 37. Table-aware chunking: large paginated tables become header-carrying row-groups
+
+The last clearly-fixable stress miss (Q07: "for dive D-2025-018 state the
+pilot, max depth, duration, samples"). Measured cause: plain FastCDC slices a
+46-row dive-log table into ~1.6 KB byte-slabs, and the slab holding
+`D-2025-018` carried neither the table header (so none of the column-name words
+the query uses — "pilot", "max depth", "duration", "samples" — were in the
+chunk) nor enough focus to embed as a unit. The row was extracted and live, but
+its chunk never ranked into the top-k. This is a chunking problem, not an
+extraction or ranking one, and it is general: paginated tables are everywhere.
+
+Fix: `derivation.chunking.chunk_table_aware`, a thin layer OVER the untouched
+FastCDC core (`chunk_structured_body`). A real markdown pipe-table — a run of
+`|…|` rows whose SECOND line is a separator, so pipe-bearing prose like
+`` `a | b | c` `` is never mistaken for one — is split into ROW-GROUPS, each
+re-prefixed with the table's header + separator, so every group is a small,
+self-describing, retrievable chunk. Groups are packed by CHARACTER BUDGET (rows
+added until the group would exceed `avg_size`), NOT a tuned row count, so the
+grouping is robust to row width and was not fitted to Q07. Prose is delegated
+to the FastCDC core unchanged, and — the load-bearing property — a body with NO
+table returns *exactly* that call's output, byte-for-byte, so every existing
+document re-chunks identically and nothing that ingested before regresses
+(verified: the 47 existing chunking/writepath tests stay green; 5 new unit
+tests cover the table path and the byte-identical guarantee).
+
+Span: all groups of one table share that table block's document char-range —
+honest because a group's text is not a contiguous document substring (the
+header is re-prefixed), so a single block-level span is the truthful provenance,
+not a per-group slice. Result: stress **37 → 38/42, zero regressions**, Q07's
+top hit both contains `D-2025-018` AND opens with the `| Dive ID | … | Max
+depth | Duration | … |` header (attribution confirmed against hit CONTENT, not
+just section name).
+
+Known gap, recorded rather than papered over: a chunker/derivation-logic change
+like this is NOT captured in the CI-07 `source_version` lineage tuple, which
+tracks only the parser/embedder/extractor version — so re-ingesting an existing
+corpus after a chunker change produces (correct) supersedes without a version
+string marking why. A derivation-version anchor is the honest Phase-1 addition.
+
+Separately (NOT a framework change, logged for honesty): the stress SCORER was
+too literal on Q28 — it demanded "62 hour" while the document (and the chunk the
+retriever correctly surfaced) says "62 h". Adding "62 h" as an accepted value
+is a scorer-fidelity fix; it moved the tally 36 → 37 with the corpus unchanged.
+The cause-labeled progression is therefore: 30 baseline → 36 image-OCR
+extraction (#36) → 37 scorer fidelity (Q28) → 38 table chunking (#37). The four
+remaining misses (Q24/Q25/Q26/Q27) are all RETRIEVAL RANKING, not extraction:
+the content is present (the Hindi sentence is a live record), but an English
+query does not rank the cross-lingual/specific chunk into top-k. A cross-lingual
+reranker / auto-derived per-namespace ranking is that lever — not more OCR or
+chunking.
+
+## 38. Rerank pool guarantees each operator's own top-3, closing a fusion blind spot; the multilingual gap that remains is an upstream extraction defect, not a ranking one
+
+The stress test's last 4 misses (Q24 German, Q25 French, Q26 Russian, Q27
+Hindi) turned out to be TWO unrelated defects, found by instrumenting the
+compiler directly (per-operator rank, fused rank, and post-rerank rank for
+each query) rather than guessing from the symptom.
+
+**Root cause 1 (fixed here): equal-weight RRF structurally buries a
+single-operator #1 pick.** Q27's Hindi facsimile chunk was ANN's rank-0
+candidate — the strongest possible dense signal — yet its FUSED rank was 37,
+past the rerank step's depth-16 cut, because RRF sums contributions across
+operators: several records that grep/BM25/ANN each mildly agreed on
+accumulated more combined score than a record only one operator found, even
+at that operator's top position. The cross-encoder never got a chance to
+judge it on content, because it was cut before rerank ever ran.
+
+Fix: `compiler._build_rerank_pool` feeds the reranker the fused top-`depth`
+UNIONED with each operator's own top-`_COVERAGE_TOP_N` ranking, so a #1 (or
+#2, #3) pick from any single operator always reaches the cross-encoder
+regardless of how cross-operator summing ranks it overall — the reranker
+still makes the final call. `rerank_depth` (16) is now a per-source cap, not
+a single global cut (reranker.py docstring updated to match).
+
+**The coverage width was tuned by measurement, and the first attempt
+regressed something — caught by the two-way diff, not assumed safe.**
+Guaranteeing each operator's own top-16 (matching `rerank_depth`) fixed Q27
+but ALSO pushed an unrelated, previously-correct hit (Q11's chart-value
+figure) out of the final top-5: a wider pool means more candidates compete
+for the same top-k slots, and the cross-encoder's imperfect judgment got more
+chances to make a mistake, not just fix one. `_COVERAGE_TOP_N = 3` (a small,
+separate constant, decoupled from `rerank_depth`) fixed Q27 with ZERO
+regressions on the full 42-question two-way diff — verified, not assumed,
+exactly the discipline the session held throughout: a net-zero trade (one win
+for one loss) was rejected even though the raw score was unchanged.
+
+**Root cause 2 (diagnosed, NOT fixed — an honest limit): Docling failed to
+promote sections 6, 7, and 7.1–7.4 to real headings.** The German/French/
+Russian partner statements (Q24/25/26) are not separate sections at all —
+Docling exported them as ONE run-on paragraph, misattributed to an unrelated
+earlier heading ("5.1 CTD-9 acquisition service"), because the source PDF's
+subsection markers ("7.2 Deutschland", "7.3 France", …) were never classified
+as section headers by Docling's layout model (yet "7.5 India" a few lines
+later WAS, for reasons internal to Docling's layout detection — an
+inconsistency, not a rule). FastCDC then chunks that merged, misattributed
+paragraph at arbitrary byte offsets, producing chunks that mix German, French,
+and Russian text together — diluting the embedding badly enough that French
+and Russian don't even reach ANN's top-50 candidates.
+
+A markdown-regex heuristic to re-detect "N.M Title" outline markers and
+promote them to synthetic headings was DESIGNED and explicitly REJECTED after
+review: closing this gap safely requires six independent guards (exclude
+matches inside existing headings/tables, cap the major number, require
+minor-number sequences starting at 1, require 3+ occurrences) discovered one
+at a time by hand on a SINGLE document, and one guard was found only after it
+was shown to corrupt the already-correct "## 7.5 India" heading — the exact
+section_path-shattering failure mode decision #33 exists to warn against.
+`DoclingParser` is also the shared ingest path for docx/pptx/xlsx/html/csv, so
+a heuristic validated on one PDF would ship to every format. The honest
+record: this needs heading recovery from Docling's own layout/style signals
+(font, weight, position), not a regex over already-exported markdown — a real
+next lever, left as a stated limit rather than patched around.
+
+**Final stress score: 30 baseline → 36 image-OCR (#36) → 37 scorer fidelity
+(Q28, not a framework change) → 38 table-aware chunking (#37) → 39 rerank
+coverage (#38, Q27) — every step zero regressions.** Q24/Q25/Q26 remain open,
+correctly attributed to the Docling heading-detection gap above, not to
+ranking or chunking.
+
+## 39. Stress test #2 (unseen document): script families, the image-object pass, metadata ingestion, and the multilingual reranker
+
+A second user-supplied stress PDF (18 pages, 44 questions, a deliberately
+DIFFERENT trick set: three-column layout, rotated in-cell headers, nested
+tables, Arabic RTL + Tamil facsimiles, a /Rotate-90 page, colour-only Gantt,
+near-duplicate annex page, locale chaos, redaction probe, invisible-text and
+metadata canaries, degraded fax). Method identical to #36-#38: baseline with
+the framework AS-IS, then fix by measured cause, two-way diff at every step,
+both corpora + full suite re-verified.
+
+**Baseline 37/44 with zero document-specific tuning** — strong evidence #36/
+#37 generalize: the map image, heatmap, stacked-area annotation, degraded fax
+(facsimile path), rotated page, rotated headers, nested tables, both locale
+traps (both-surfaced), the redaction notice, and the invisible white-text
+canary all passed. The 7 misses attributed: Arabic ×3 (language not in the
+OCR list), Tamil (no engine), metadata (never ingested), 2 ranking near-misses.
+
+**Fixes, each general and measured (final: doc-2 40/44, doc-1 40/42):**
+- **Script families** (`_SCRIPT_FAMILIES`) generalize #36's Devanagari-only
+  pass: each family = script letter-regex + the engine that can read it +
+  the same count/fraction line filter. Tamil -> Tesseract (`tam`), because
+  this EasyOCR release's Tamil model is broken upstream (checkpoint/charset
+  mismatch) while tesseract reads the shaped statement perfectly. Missing
+  engine = loud warning, never silent.
+- **Vision's language list is ORDER-SENSITIVE — measured, decisive:** with
+  ar-SA last after six Latin/CJK codes, Vision returned ZERO characters from
+  the perfectly legible Arabic statement crop; ar-SA first reads it flawlessly
+  (shaped RTL, Arabic-Indic numerals). So Arabic is a family too (its own
+  short Vision list), never a tail entry in one long list.
+- **Embedded-image-object pass:** pypdfium2's page object list is ground truth
+  for "a raster is pasted here", independent of Docling's layout model — the
+  Tamil statement was never classified as a Picture. Objects >1.5% of page
+  area, not overlapping a detected Picture (>50% area), are cropped and OCR'd.
+- **Per-crop plurality arbitration:** an engine fed a foreign script
+  HALLUCINATES its own (measured: Tesseract emitted plausible Tamil from the
+  Arabic crop, and it passed the per-line filter because it genuinely IS
+  Tamil script). On one crop, only the family with the most script letters
+  survives (237 Arabic vs ~40 junk Tamil on the measured crop). Full pages
+  are NOT arbitrated — a page can host two genuine scripts.
+- **PDF document-info metadata** (`doc_metadata=True`, default on): Title/
+  Author/Subject/Keywords as a fenced `# Document Metadata` section — the
+  keyword canary lives ONLY there and nothing else in the pipeline reads it.
+- **Default reranker bge-reranker-base -> bge-reranker-v2-m3**, matching the
+  default embedder's multilinguality (same reasoning as #34's embedder swap).
+  Measured: the Tamil statement was ANN's rank-0 candidate and reached the
+  rerank pool (#38 coverage working as designed), but the English-centric
+  base model scored it 0.002 and it lost the top-k to topical-English
+  distractors; v2-m3 scores the same-shape Arabic pair 0.80 vs 0.001. CPU
+  cost ~35 ms/pair (~0.7 s/query pool). This ALSO fixed doc-1's Q24 (German)
+  and Q26 (Russian) — two of the three #38 left open — without touching the
+  heading-detection gap itself (the chunks reach the pool via ANN; the
+  multilingual reranker now ranks them).
+
+**The one accepted trade, stated as a trade (not zero-regression):** with
+v2-m3, doc-1 trap Q21's second value (the Table 6-1 total) sits at rank 5 —
+one past the evaluation's top-5 convention (base had it at 2). Datum itself
+still returns the chunk (the caller receives the full reranked pool); only
+the 5-hit scoring cut counts it lost. +4 real cross-lingual wins against −1
+boundary effect, accepted deliberately and recorded.
+
+**Scorer-fidelity notes (not framework changes, logged for honesty):** Q14/
+Q15's keys were extended to accept the Tamil-script equivalents the document
+actually contains ("180 கிலோமீட்டர்" = 180 km; "இருமுறை நாகப்பட்டினம்" = twice
+weekly, Nagapattinam) — the right chunk WAS rank-0; the scorer's Latin-only
+literal couldn't see it. Same class as #37's "62 h".
+
+**Honest remaining misses, attributed:** doc-2 Q08/Q09/Q10 (Arabic) are now
+EXTRACTED but a purely-English query ranks the Arabic chunk 20-33 in dense
+similarity — past every pool; the lever is query-side (multilingual query
+expansion / translation gloss at ingest), not more OCR. Doc-2 Q06 is a
+COMPARATIVE query ("which instrument is at ALPHA only") whose answer row
+carries no "only" semantics — a class top-k chunk retrieval cannot answer
+directly; Datum's navigate/fetch verbs are the affordance for it. Doc-1 Q25
+(French) remains the #38 heading-detection gap. Doc-1 Q21 as above.
+
+## 40. The multilingual roster: 20 script families, readback-verified, with the sparse-gate + noise-floor that make a broad default safe
+
+"Multilingual" has to mean the DEFAULT configuration, not a hidden knob. The
+image-OCR script roster grew from 3 families to 20 — arabic, thai, korean
+(Vision, each with its own order-fixed language list per #39's lesson);
+devanagari (EasyOCR); tamil, hebrew, greek, bengali, telugu, kannada,
+malayalam, gujarati, gurmukhi, sinhala, myanmar, khmer, lao, georgian,
+armenian, ethiopic (Tesseract, tessdata_best) — and every family's language
+is in `_IMAGE_OCR_LANGS_DEFAULT`. The BM25 lexical channel's text-search
+config is now a `Corpus.open(fts_config=...)` knob ('english' default;
+'simple' or a language config for predominantly non-English corpora — dense
+retrieval is language-agnostic either way).
+
+**Verification is a render→OCR→readback probe, not a claim:** each family's
+sample sentence is rendered by CoreText (the OS shaper — PIL's basic renderer
+produces garbage for shaped scripts even with raqm present, which made every
+engine "fail" until the probe itself was fixed) and read back through the
+family's real engine path. **18/20 pass; gujarati and myanmar read their
+scripts only weakly with tesseract on rendered text** — kept as best-
+available, recorded as weak, never presented as verified-strong.
+
+**The hard lesson: a broad blind roster hallucinates.** First full run on the
+stress corpora polluted doc-1 with ~15 junk chunks: on a degraded 1-bit fax
+page whose memo Vision read fine, ten tesseract families each emitted
+hundreds of chars of plausible junk in their own scripts (every line passing
+its own per-line filter), and a sparse chart crop crowned 'incest பலவாறு கறு'
+as its arbitration winner. Two heuristic rescue attempts (distinct-letter
+counts, mean word length) failed on measurement — Indic combining marks break
+naive tokenization — and were ABANDONED rather than stacked (#38's
+anti-pattern). The principled fix reuses the existing sparse-gate: expensive
+engines run on a facsimile page, like on a crop, ONLY when Vision read ~
+nothing there (a scan Vision reads well is a script it knows; blind engines
+can only hallucinate over it), Vision families always run (cheap,
+self-filtering); the image-object pass skips facsimile pages (the full-page
+pass covers them — the object crop was double-ingesting the fax memo); and a
+crop-arbitration winner must clear a measured noise floor
+(`_MIN_CROP_SCRIPT_LETTERS = 24`: real statement crops carry 100–460 script
+letters, every observed junk winner ≤ 25). Cost, also measured: the gates cut
+the 20-family ingest from ~14 min back to ~6.5 min per document.
+
+**Re-verified after the roster landed: doc-1 40/42 and doc-2 40/44 both
+unchanged (zero new regressions), full suite 251 green.** The roster's
+version stamp is `+scr20@` — growing it is a detectable producer change.
+
+## 41. Contextual retrieval (LLM-free) + the ingest-time translation gloss — doc-2 reaches 44/44
+
+Two research-backed levers, both implemented the honest way and verified on
+both stress corpora with the two-way diff.
+
+**Contextual retrieval, the LLM-free variant.** The most benchmark-backed
+retrieval technique Datum lacked (published measurements: 35–49% retrieval-failure
+reduction from prepending chunk context before embedding + BM25, 67% with a
+reranker). Datum's chunks already CARRY their context — the heading-derived
+`section_path` — so `views.base.contextual_text()` prepends
+`"doc › section › subsection"` to the text each retrieval view derives from.
+The STORED record is untouched (chunk identity, CAS, what a caller reads —
+all exactly as before); only the derived, disposable view input changes,
+stamped `dense-v2-ctx`/`lexical-v2-ctx` so the re-derive is a detectable
+producer change. Measured effect: doc-2 Q06 — the comparative "installed at
+ALPHA only" question previously classified as unanswerable-by-top-k — flipped
+to PASS, because Table 2-1's row-groups now embed with their
+"2 · Instrumentation" context. Zero regressions anywhere else; the eval
+gate's floors held without recalibration.
+
+**The ingest-time English gloss (NLLB-200-distilled-600M).** The last three
+doc-2 misses (Arabic Q08/Q09/Q10) were extracted-but-unreachable: an English
+query's dense similarity to pure-Arabic text ranked the statement 20–33,
+below every retrieval pool — a QUERY-side language gap no amount of OCR
+fixes. Each script family now carries an NLLB source code, and family OCR
+text gets a machine translation appended IN the same section, explicitly
+labeled ("Machine gloss (NLLB-200, arb_Arab→eng): …") so provenance stays
+honest — a reader always knows which words the document actually contains,
+and the original script text always comes first. Every channel (dense, BM25,
+grep, reranker) gains an English handle. `translation_gloss=True` by default
+with image_ocr; loud warning + scriptonly ingest when the model is
+unavailable. Cost: ~2.4 s per glossed chunk, only on non-Latin family output.
+
+**Result: doc-2 44/44 (from 37/44 baseline — every deliberately-planted trick
+retrieved), doc-1 holds 40/42 (the two remaining are the recorded rank-5
+trade #39 and the Docling heading gap #38), suite 251 green.** The scorer for
+Q14/Q15 was ALSO corrected to accept the Tamil-script equivalents the
+document actually contains — recorded as scorer fidelity, not framework gain.
+
+## 42. First public-benchmark validation: BEIR SciFact, nDCG@10 = 0.697
+
+Datum's quality now has a number comparable to published baselines, not just
+the two private stress corpora. BEIR SciFact (5,183 scientific abstracts, 300
+test queries, the standard zero-shot retrieval benchmark) was run END TO END
+through the real system — every document through the full write path (WAL,
+CAS, chunking, both views), every query through the real hybrid search +
+rerank — with ONE disclosed config change: `abstain_min_similarity=0.0`
+(the benchmark measures ranking; abstention would refuse to answer some
+queries, which BEIR has no way to score).
+
+**Result: nDCG@10 = 0.6968, recall-any@10 = 0.807** (300 queries, ~1.4 s per
+query on CPU; harness `scratchpad/beir_scifact.py`, metric computed directly
+from the official qrels). Published reference points (Thakur et al. 2021 and
+the BEIR leaderboard): BM25 0.665, DPR 0.318, ANCE 0.507, ColBERTv2 0.693,
+SPLADE++ 0.699. Datum lands ABOVE BM25 and ColBERTv2 and at SPLADE++ level —
+zero-shot, no corpus-specific tuning, with tenancy, conformance, provenance,
+and audit tracing all active in the measured path. Stated honestly: the
+largest specialized retrievers (bge-large class, monoT5-3B rerankers) publish
+0.72–0.76 on SciFact; Datum's 0.697 is competitive-with-strong-baselines,
+not state-of-the-art — the credible claim, and the one the paper should make.
+
+## 43. The VisionDescriber slot: picture understanding as a pluggable, provenance-labeled Protocol
+
+OCR reads text in images; it cannot read a colour-coded Gantt bar or a trend
+in a chart's pixels. That understanding needs a VLM — and WHICH VLM is a
+deployment choice (frontier API for an enterprise, local model for an
+air-gapped site, none for a text corpus). So, like the Embedder and Reranker
+before it, it is a Protocol slot: `Corpus.open(vision_describer=…)` accepts
+anything with `name`/`version`/`describe(image)->str`. The description lands
+in the SAME section as the picture's OCR text, labeled in-text with the
+producing model ("Vision description (model@version): …") — interpretation
+visibly distinct from document text, the same honest-provenance pattern as
+the NLLB gloss. A broken describer warns and never fails the parse (the
+figure still ingests OCR-only). Default None: no model, no cost, no silent
+behavior.
+
+Measured on this machine, recorded honestly: the slot is proven end-to-end
+with a real local model, but NO locally-runnable small VLM here is a usable
+describer — granite-docling-258M (a document-conversion model) loops
+degenerately on charts, and Qwen2-VL-2B-4bit emits hallucinated garbage
+through this mlx_vlm version. `vision_describer.MLXVisionDescriber` ships as
+the reference adapter with that caveat in its docstring; the enterprise value
+is the socket: plug a frontier VLM into three members and every downstream
+layer (chunking, embedding, BM25, rerank, provenance) benefits unchanged.
+
+## 44. The relevance-feedback loop: judgments through signed hit tokens, promotion-gated calibration, per-namespace overrides
+
+The learned relevance loop's MECHANISM, shipped so a deployment with real
+traffic can benefit — with the discipline that keeps it from tuning itself
+into noise. Three pieces, all tested end-to-end against real Postgres:
+
+- **`Corpus.feedback(hit_id, useful, principal)`** + the sixth MCP verb
+  `feedback`: a judgment can only reference a record the caller was actually
+  served (the signed hit token resolves or raises) and only in the caller's
+  own namespace (fail-closed like fetch — tested with a foreign-namespace
+  replay). Every judgment stores the token's plan_id, so it stays attached to
+  the persisted, replayable retrieval that produced it — a labeled example,
+  never an orphaned thumbs-up. Agent traffic through MCP generates the
+  training signal as a side effect of normal use.
+- **`datum calibrate --namespace`** (`eval.calibrate.run_calibration`):
+  re-executes the actually-judged queries (recovered from their plan traces)
+  under a grid of fusion-weight/floor candidates, scores MRR of the
+  useful-marked records, and PROMOTES only if the winner beats the current
+  policy on a deterministic 80/20 holdout split. Refuses loudly below 8
+  judged queries ("refusing to tune on noise") and refuses without holdout
+  gain — both refusal paths tested. Deliberately a grid over the rule table's
+  declared parameters, not a gradient ranker: honest about how much signal a
+  few dozen judgments carry. Phase-2 replaces the SEARCH, not the discipline.
+- **`policy_overrides`**: promoted parameters stored per namespace WITH their
+  evidence basis (judged-query count, holdout scores), loaded at Corpus.open,
+  applied by RuleTablePolicy per-namespace at plan selection — and visible in
+  every plan's EXPLAIN (tested: a calibrated bm25 weight and floor appear in
+  the explain output; an uncalibrated namespace keeps the declared defaults).
+
+Suite 258 green; both stress corpora re-verified unchanged (doc-1 40/42,
+doc-2 44/44) — the loop is strictly additive until feedback earns a change.

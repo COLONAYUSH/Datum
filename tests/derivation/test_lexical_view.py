@@ -160,7 +160,7 @@ def test_derive_computes_tsv_server_side_and_stamps_provenance_columns(conn, sto
         assert record_id == str(row.record.id)
         # namespace comes from provenance.writer.namespace (decisions.md #7)
         assert namespace == row.record.provenance.writer.namespace
-        assert producer_version == "lexical-v1/pg-tsvector-english"
+        assert producer_version == "lexical-v2-ctx/pg-tsvector-english"
 
     # Server-side tokenization: 'running' was stemmed to the lexeme 'run' by
     # the SAME config query text goes through at retrieval time.

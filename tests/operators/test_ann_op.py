@@ -12,7 +12,7 @@ real Postgres through the real write path, because the properties under test
 distance-to-similarity scoring — are properties of the SQL, not of Python
 around it. DB tests use a deterministic FakeEmbedder (hash-bucket geometry,
 no model load); the single real-model test at the bottom is the only one
-that loads bge-small-en-v1.5.
+that loads the configured default embedder (bge-m3).
 
 Fixtures DROP view_dense on teardown: sibling test modules truncate
 `records` without CASCADE, and a leftover FK-bearing view table would break
@@ -336,10 +336,10 @@ def test_limit_bounds_the_candidate_count(conn, store):
     importlib.util.find_spec("sentence_transformers") is None,
     reason="sentence-transformers not installed (datum[embed] extra)",
 )
-def test_real_bge_model_ranks_authentication_above_banana_bread(conn, store):
+def test_real_embedder_ranks_authentication_above_banana_bread(conn, store):
     embedder = SentenceTransformersEmbedder()
     view = DenseView(embedder)
-    view.ensure_schema(conn)  # 384-dim table, embedder-driven DDL
+    view.ensure_schema(conn)  # dim comes from the embedder (embedder-driven DDL)
     texts = {
         "s0": "Authentication and passwords: how users sign in to their accounts.",
         "s1": "Resetting a forgotten password restores access to a user account.",
