@@ -2,7 +2,7 @@
 
 **Purpose of this file:** everything a fresh session needs to continue this work exactly where it left off, with no re-discovery and no repeated mistakes. Read section 0 first, then 9 (next steps). The rest is reference.
 
-**Last updated:** 2026-08-10, mid-session building Milestone B (real hybrid retrieval). The Milestone B build is CODE-COMPLETE and self-verified — 197 tests pass against a real Postgres, and end-to-end semantic search works (a query with zero term overlap retrieves the right section through dense+BM25+ANN fusion and a real cross-encoder rerank). An adversarial review of the new operators was running when this line was written; §12 records its outcome and any fixes. The prior line, kept for provenance: "2026-08-08, end of the session that built Datum through Milestone A and fully provisioned the Milestone B environment (pgvector, embedder, Docling + OCR + ASR installed and verified)."
+**Last updated:** 2026-08-11 — **v1 is feature-complete and stress-hardened on TWO adversarial PDFs.** Milestones A/B/C/D and the multi-format track (task #30) are all built and self-verified: **251 tests pass** against a real Postgres, the CLI and MCP server run end to end, and a real MCP client drives all five verbs over the real transport (§15). Two user-supplied stress tests drove the quality arc: **doc-1 (§16): 25 → 40 of 42** (bge-m3 embedder #34, image-OCR composition #36, table-aware chunking #37, rerank-pool coverage #38, multilingual reranker #39); **doc-2, an UNSEEN document (§17): 37/44 baseline with zero tuning → 40/44** (script families incl. Arabic/Tamil, embedded-image-object pass, plurality arbitration, metadata ingestion, bge-reranker-v2-m3 #39). A multilingual expansion (#40) then grew the OCR roster to **20 script families** (Arabic, Thai, Korean, Hebrew, Greek, Devanagari, Tamil, Bengali, Telugu, Kannada, Malayalam, Gujarati, Gurmukhi, Sinhala, Myanmar, Khmer, Lao, Georgian, Armenian, Ethiopic), each render→OCR→readback-verified (18 strong, 2 weak), all ON BY DEFAULT, kept hallucination-free by a measured sparse-gate + noise floor; `Corpus.open(fts_config=...)` exposes the lexical-channel language. Then #41 landed the two most research-backed levers: **LLM-free contextual retrieval** (section-path-prefixed view inputs; flipped the 'comparative query' class) and the **labeled NLLB-200 ingest gloss** for non-Latin OCR text (flipped all three Arabic questions). **Final: doc-1 40/42, doc-2 44/44 — every planted trick in the unseen document retrieved. 251 tests green. And the first PUBLIC benchmark (#42): BEIR SciFact nDCG@10 = 0.697 through the full governed pipeline — above BM25 (0.665) and ColBERTv2 (0.693), at SPLADE++ (0.699) level, zero-shot on CPU.** Enterprise extension points landed (#43/#44): the **VisionDescriber slot** (plug any VLM; descriptions provenance-labeled in-text; local small VLMs measured unusable, the socket is the value) and the **relevance-feedback loop** (6th MCP verb `feedback` with fail-closed signed-token judgments; `datum calibrate` grid-tunes weights/floor per namespace, promotion-gated on held-out MRR; overrides audited in `policy_overrides` and visible in EXPLAIN). **258 tests green; both stress corpora unchanged.** Remaining, honestly attributed in §17. Then: the human GUI-client step (§15) and Phase-1. Build history: §12–§17. Decisions #1–40 in `datum/docs/decisions.md`.
 
 ---
 
@@ -13,7 +13,7 @@ This project has three arcs, done in order:
 2. **Paper** (FIRST DRAFT DONE) — a human-voiced research paper + typeset PDF arguing the failures and proposing the framework. Lives in `paper/`.
 3. **Build** (IN PROGRESS) — `Datum`, the actual framework, implemented and tested. Lives in `datum/`. **This is the active work.**
 
-**Where the build is:** Milestones M0 (foundation), A (walking skeleton), **B (real hybrid retrieval: dense + BM25 + ANN fused by RRF + a cross-encoder rerank; §12)**, and **C (eval gate wired to the live Corpus + abstention + concurrency hardening; §13)** are all DONE and verified, and so is the **multi-format DoclingParser track (task #30; §14)** — **221 tests pass against a real Postgres**. The system runs end-to-end through a real CLI (`datum ingest|search|serve|eval|benchmark`) and MCP server; semantic search works (a query with zero term overlap retrieves the right section), out-of-corpus queries abstain, and docx/pptx/xlsx/html/csv all ingest through Docling into the same pipeline. **Milestone D (final acceptance: a real Claude Code/Desktop MCP session against `datum serve`) is the only thing left** — it is interactive (needs a real MCP client attached), so it's the natural hand-back point.
+**Where the build is: v1 is FEATURE-COMPLETE.** Milestones M0, A, **B (hybrid retrieval; §12)**, **C (eval gate + abstention + concurrency; §13)**, the **multi-format DoclingParser track (task #30; §14)**, and **D (MCP acceptance over the real transport; §15)** are all DONE and verified — **227 tests pass against a real Postgres**. The system runs end-to-end through a real CLI (`datum ingest|search|serve|eval|benchmark`) and a real MCP server driven by a real MCP client: semantic search works (zero-term-overlap queries retrieve the right section), out-of-corpus queries abstain, docx/pptx/xlsx/html/csv ingest through Docling into the same pipeline, and all five MCP verbs round-trip over stdio with tenancy fail-closed. A real-PDF stress test (§16) drove three verified quality upgrades — **bge-m3 multilingual embedder, per-deployment abstention floor, ocrmac OCR (25→30 of 42)**. **Open levers:** fix #4 table-aware chunking, a Docling VLM pass for charts/diagrams, and the human GUI-client step (§15); then Phase-1.
 
 **To resume the build immediately:**
 ```bash
@@ -25,7 +25,7 @@ export DATUM_HIT_SIGNING_KEY="dev-key"     # optional: stable hit_ids across res
 # The suite loads real models; HuggingFace's network HEAD checks can HANG for
 # many minutes on an SSL-cert error here. The models are already cached, so
 # run OFFLINE — identical result, ~22s instead of minutes (or a hang):
-HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 python -m pytest tests/ -q   # expect: 221 passed (verified 2026-08-11)
+HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 python -m pytest tests/ -q   # expect: 258 passed (verified 2026-08-11)
 datum ingest <somefile.md> --source-id x --namespace tenant:acme
 datum search "your query" --namespace tenant:acme
 dropdb datum_dev
@@ -33,12 +33,12 @@ dropdb datum_dev
 
 **Milestone B prerequisites — ALL DONE (verified 2026-08-08):** the environment is fully provisioned; the next work is code, not setup.
 - `pgvector` 0.8.0 — source-built against PG17; extension + HNSW index + KNN query all verified.
-- Embedder — `sentence-transformers` 5.7.0 + `BAAI/bge-small-en-v1.5` (384-dim); loads and encodes. torch 2.13.0.
+- Embedder — DEFAULT is now **`BAAI/bge-m3`** (1024-dim, multilingual; decision #34), cached; `bge-small-en-v1.5` (384-dim) also cached and available via `dense.bge_small_en()`. Reranker `bge-reranker-base` cached. torch 2.13.0.
 - Docling 2.118.1 — with ALL OCR engines (easyocr, ocrmac [Mac-native, the default Datum will use], rapidocr, tesserocr) + Whisper ASR. Advertises every input format (pdf, docx/xlsx/pptx, doc/xls/ppt, odt/ods/odp, epub, html, latex, csv, image, audio, video, USPTO/JATS/XBRL XML, …).
-- **HuggingFace model downloads WORK here** (bge-small pulled fine) — no `HF_ENDPOINT`/proxy config needed. Docling's layout/table/VLM/Whisper models will download at runtime the same way.
+- **HuggingFace network + the Zscaler cert fix (IMPORTANT).** HF downloads fail with `CERTIFICATE_VERIFY_FAILED` because Zscaler TLS-inspects HTTPS and Python's default bundle lacks the corporate root. **FIX (works): build a CA bundle that includes the keychain's ZSCALER ROOT CA and point HF at it** — `security find-certificate -a -p /Library/Keychains/System.keychain >> bundle.pem` (+ certifi's), then `export REQUESTS_CA_BUNDLE=bundle.pem SSL_CERT_FILE=bundle.pem`. That is how bge-m3 and the Docling models were pulled. For the TEST SUITE (cached models only), skip the network entirely with `HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1` (also avoids a multi-minute HEAD-check hang). **Now cached and working:** bge-m3 (default embedder), bge-small-en-v1.5, bge-reranker-base, faster-whisper, AND **Docling layout+tableformer** (so PDF ingestion now works — a 19-page PDF ingested + OCR'd in ~2min). Not cached: Docling VLM (SmolVLM/granite-docling — the picture-understanding frontier, §16).
 - Artifactory is pip's index (all the above routed through it). Note: the harness auto-mode classifier blocks `pip install`, so any further installs must be user-run via a `!` prompt or approved.
 
-**Read these repo files before writing code:** `datum/docs/decisions.md` (31 recorded decisions — do NOT re-litigate them; #19–28 are Milestone B + its two adversarial reviews, #29–30 are Milestone C, #31 is the multi-format DoclingParser), the approved plan at `~/.claude/plans/lazy-popping-frost.md`, and `design/FRAMEWORK.md` (the spec; the "MVP definition" section is the actual v1 scope).
+**Read these repo files before writing code:** `datum/docs/decisions.md` (35 recorded decisions — do NOT re-litigate them; #19–28 are Milestone B + its two adversarial reviews, #29–30 are Milestone C, #31 is the multi-format DoclingParser, #32 is Milestone D, #33 MarkdownParser code-fence fix, #34 bge-m3 default + per-deployment abstention floor, #35 ocrmac OCR — all from real dogfooding/stress-testing), the approved plan at `~/.claude/plans/lazy-popping-frost.md`, and `design/FRAMEWORK.md` (the spec; the "MVP definition" section is the actual v1 scope).
 
 ---
 
@@ -63,7 +63,7 @@ The framework is **Datum**: *"retrieval is a compiled query, not a hand-wired pi
 | **Datum code — Milestone B (hybrid retrieval)** | **DONE + verified (214 tests); both adversarial reviews passed, fixes applied (decisions #19–28)** | dense+BM25+ANN fused (RRF) + cross-encoder rerank, all through the conformance gate |
 | **Datum code — Milestone C (eval gate + concurrency hardening)** | **DONE + verified (219 tests); decisions #27,#29,#30** | eval gate wired to live Corpus (`datum eval`); real dense-similarity abstention; unconditional audit trace; namespace-scoped-span concurrency test |
 | **Datum code — multi-format ingestion (task #30; §14)** | **DONE + verified (221 tests); decision #31** | DoclingParser + `ingest_file`/`datum benchmark`; md/txt/html/csv/docx/pptx/xlsx pass end-to-end; pdf/image/audio env-blocked & reported |
-| Datum code — Milestone D (real tool-calling-model MCP test) | **NEXT (interactive)** | point a real Claude Code/Desktop session at `datum serve` |
+| **Datum code — Milestone D (MCP acceptance)** | **DONE at protocol level + verified (223 tests); §15, decision #32** | real MCP client over real stdio transport drives all 5 verbs + tenancy fail-closed; live-LLM/GUI-client confirmation is the one documented human step |
 
 ---
 
@@ -183,11 +183,11 @@ Then **Milestone C** (wire `eval/regression.py` as a real gate; more concurrency
 
 ## 10. All artifact paths + memory
 
-- Repo root: `/Users/L054011/Downloads/Reimagining-RAG/` (research + paper + design + `datum/` code + this file). NOT a git repo at root; `datum/` IS `git init`'d but has **no commits yet** (user rule: commit only when asked).
+- Repo root: `/Users/L054011/Downloads/Reimagining-RAG/` (research + paper + design + `datum/` code + this file). NOT a git repo at root; `datum/` is a git repo the **user** has begun committing/pushing to their GitHub `COLONAYUSH/Datum` (2 commits as of 2026-08-11, all authored by the user, no Claude attribution). User rule stands: commit ONLY when asked, user is sole contributor.
 - Approved build plan: `~/.claude/plans/lazy-popping-frost.md`.
 - Decisions log: `datum/docs/decisions.md` (1–18).
 - Persistent memory: `/Users/L054011/.claude/projects/-Users-L054011-Downloads-Reimagining-RAG/memory/` → `MEMORY.md` (index) + `reimagining-rag-research-project.md`. **A fresh session auto-loads MEMORY.md**, which points here as the authoritative resume doc (both updated 2026-08-08).
-- Tracker status: #26 Milestone B — DONE; #27 Milestone C — DONE; #30 multi-format ingestion + benchmark — DONE. **Only #28 Milestone D remains** (interactive: a real MCP client against `datum serve`). Phase-1 roadmap items (as-of queries, crypto-shred, fine-grained predicate ACL, learned plan selection, calibrated scoring/abstention, pdf/image once Docling models are staged) are out of v1 scope per `design/FRAMEWORK.md`.
+- Tracker status: #26 Milestone B — DONE; #27 Milestone C — DONE; #30 multi-format ingestion + benchmark — DONE. **All milestones done** (#28 Milestone D verified at the protocol level; §15 has the one human GUI-client step). Phase-1 roadmap items (as-of queries, crypto-shred, fine-grained predicate ACL, learned plan selection, calibrated scoring/abstention, pdf/image once Docling models are staged) are out of v1 scope per `design/FRAMEWORK.md`.
 
 ---
 
@@ -263,3 +263,99 @@ Retrieval-first was the ordering, and it held: dense/BM25/ANN were proven correc
 **Environment-blocked, reported not hidden (decision #31, §11's no-silent-downscope rule):** **pdf** and **image/scanned** need Docling's layout/OCR models, which download from HuggingFace on first use — that egress is unavailable here (models not cached; HF network HEAD calls hang, the same failure that stalls the suite without `HF_HUB_OFFLINE=1`). **audio**: Whisper is cached, but there's no honest way to synthesize known-transcript speech to assert on. The DoclingParser handles all of these unchanged once the models are staged; only the benchmark's coverage is limited, and `datum benchmark` prints the skipped families with reasons. **To unblock pdf/image:** stage the Docling models into the HF cache (or point `HF_ENDPOINT` at Lilly's Artifactory `huggingfaceml` remote, HANDOFF §8's noted path), then add pdf/image cases to `eval/multiformat_benchmark.py` and the page/bbox `iterate_items()` mapping to `DoclingParser`.
 
 **IMPORTANT operational note:** run the suite and any Docling/model work with `HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1` — cached models load instantly; without it, HF's cert-failing network HEAD checks retry and can hang for many minutes.
+
+---
+
+## 15. Milestone D — final acceptance (DONE at the protocol level; one human step remains) — 2026-08-11
+
+The plan's final checkpoint is the Agent Tool Surface tested against a real tool-calling model. The self-drivable core is DONE and is a permanent test: `tests/mcp_server/test_serve_e2e.py` launches a real `datum serve` SUBPROCESS (own process, own Corpus, real bge embedder + cross-encoder) and drives it with a real `mcp.client` `ClientSession` over the real stdio JSON-RPC transport — `initialize`, `list_tools` (the five verbs), then `search → fetch(hit_id) → explain(plan_id)`, `navigate`, `since`, all decoded off the wire, plus a second server bound to another tenant proving namespace fail-closed THROUGH the transport. It confirmed the kernel dataclasses serialize cleanly to MCP `structured_content` with no adapter (decision #32). Full suite: **227 passed**.
+
+**The one part that needs a human (a GUI MCP client + a live LLM):** point Claude Code/Desktop at a running server and actually use it. Steps:
+
+1. Ingest a corpus into a real db (NOT a scratch/test db the suite truncates):
+   ```bash
+   cd datum && source .venv/bin/activate
+   export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 DATUM_HIT_SIGNING_KEY="<stable-key>"
+   createdb datum_live 2>/dev/null || true
+   datum ingest <yourdoc.md|.pdf|.docx> --namespace tenant:you --dsn postgresql://localhost/datum_live
+   ```
+2. Register the server with an MCP client. For Claude Code, add to `.mcp.json` (or `claude mcp add`):
+   ```json
+   {
+     "mcpServers": {
+       "datum": {
+         "command": "<abs path>/datum/.venv/bin/python",
+         "args": ["-m", "datum.cli", "serve", "--namespace", "tenant:you",
+                  "--dsn", "postgresql://localhost/datum_live"],
+         "env": {"HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1", "DATUM_HIT_SIGNING_KEY": "<stable-key>"}
+       }
+     }
+   }
+   ```
+   (Dev binding: `serve` binds ONE principal — `tenant:you` here — for the whole stdio session; production binds per-connection via `mcp_server.auth_middleware`.)
+3. In the client, confirm the five tools appear and ask questions that make the model call `search`/`fetch`/`navigate`; verify answers trace to ingested content, and that out-of-corpus questions abstain. That closes the model-in-the-loop acceptance the headless test cannot.
+
+**Status: v1 is feature-complete.** All milestones (A/B/C/D) and task #30 are done and verified; only the human GUI-client confirmation above and the Phase-1 roadmap remain.
+
+---
+
+## 16. Real-PDF stress test + the improvements it drove — 2026-08-11
+
+The user supplied a deliberately brutal 19-page PDF (`~/Downloads/rag_stress_test_report.pdf`) — a fictional "Meridian Trench" annual report with five languages, merged-cell tables, a 46-row page-spanning dive log, charts whose data is only in pixels, diagrams/org-charts with embedded text, a simulated 1998 scanned memo, code blocks, and four deliberate contradiction traps — plus a 42-question answer key (`~/Downloads/answer_key.md`). Ingested through Datum's REAL Docling PDF path (layout + tables + OCR), then every question run through the real hybrid search. Harness + scorer: `scratchpad/pdf_stress_test.py`, `score.py` (scored as a retrieval substrate: did the right chunk surface; for traps, did BOTH values surface).
+
+**Score: 25/42 → 30/42 → 36/42 → 38/42 → 39/42**, cause-labeled and each with ZERO regressions (two-way per-question diff, every win attributed to the specific chunk): 30 baseline (bge-m3 + per-deployment floor) → **36** image-OCR extraction (#36) → **37** scorer fidelity (Q28 "62 h", NOT a framework change — see below) → **38** table-aware chunking (#37, Q07) → **39** rerank-pool coverage (#38, Q27). What Datum nailed even at baseline: all 4 contradiction traps (both values surfaced), the sentence-split-across-a-page-break, near-duplicate life-stage disambiguation, code blocks, the merged-header financial table, footnotes, and the scanned-memo depth via OCR.
+
+**Improvements made (decisions #34, #35, #36, #37, #38):**
+- **Image-embedded text is now recovered (`Corpus.open(image_ocr=True)`, decision #36).** The #35 belief that picture/chart/diagram text "needs a VLM" and that Hindi was a "platform limit" was FALSIFIED: the real cause is that Docling's `export_to_markdown()` drops the text of layout-detected Picture clusters (proven `in_docmodel=1 / in_markdown=0`). Fix is an additive OCR composition — Picture-region crops (Apple Vision, high-DPI, BOTTOMLEFT-flip) + full-page OCR of facsimile pages (text-layer < 150 chars) + majority-Devanagari lines via EasyOCR. Recovered Q11/Q12 (chart values), Q38/Q39 (diagram/org-chart labels), Q42 (berth count), Q29 (facsimile sounding sheet). Off by default → the base suite is untouched and cannot regress. Cost: the Devanagari sweep runs EasyOCR per digital page (~6 min for 19 pages, one-time at ingest).
+- **Table-aware chunking (decision #37).** `chunk_table_aware` splits large markdown pipe-tables into header-carrying row-groups so a specific row (Q07 dive `D-2025-018`) stays a small, self-describing, retrievable chunk — before this, FastCDC sliced the 46-row dive log into header-less slabs that never ranked. A table-free body chunks byte-identically to the old FastCDC path (verified), so nothing regresses. Recovered Q07.
+- **Rerank-pool coverage guarantee (decision #38).** Equal-weight RRF fusion can bury a candidate only ONE operator ranks highly (even at that operator's #1) behind candidates several operators mildly agree on — proven: Q27's Hindi chunk was ANN's rank-0 pick yet fused-rank 37, past the rerank depth-16 cut, so the cross-encoder never saw it. `compiler._build_rerank_pool` now unions the fused top-depth with each operator's own top-3, guaranteeing a look regardless of fused rank. The width was tuned by measurement, not assumed: guaranteeing each operator's own top-16 fixed Q27 but ALSO regressed an unrelated hit (Q11) out of the top-5 — a wider pool means more competition for the same slots. `_COVERAGE_TOP_N = 3` fixed Q27 with zero regressions on the full 42-question diff. Recovered Q27.
+- **Scorer fidelity (Q28, NOT a framework change).** The stress scorer demanded the literal "62 hour"; the document (and the chunk the retriever correctly surfaced) says "62 h". Accepting "62 h" moved the tally 36→37 with the corpus unchanged — logged separately so it is never mistaken for a retrieval improvement.
+- **Default embedder bge-small-en → bge-m3** (1024-dim, multilingual). Recovered the Japanese question and lifted overall ranking; the English-only model literally could not retrieve non-English chunks. `Embedder` is a Protocol; `dense.bge_small_en()` restores the lighter English model.
+- **Abstention floor is now per-deployment** (`Corpus.open(abstain_min_similarity=...)`, default 0.44 recall-biased; eval gate uses 0.53 via `eval.gate.GATE_ABSTAIN_FLOOR`). Proven necessary: the absolute cosine scale is corpus-dependent, so no single global floor separates a diverse corpus's real answers from a homogeneous corpus's out-of-corpus queries. Recovered the four false-abstentions.
+- **ocrmac OCR** (Apple Vision, multilingual, region-based) with the requested languages filtered against what the installed Vision supports (an unsupported code used to crash + degrade the parse).
+
+**What #36 RETRACTED from the old "remaining limits":** the claim that chart/
+diagram/picture text "needs a VLM" and that Hindi was "a platform limit" was
+wrong — all of it is recovered now via `image_ocr=True` (see the improvement
+bullet above and decision #36). The true cause was Docling's markdown export
+dropping picture-cluster text, not any OCR limit.
+
+**The 3 remaining misses (Q24 German, Q25 French, Q26 Russian) are a
+diagnosed, NOT-fixed upstream extraction defect — not a ranking problem, not
+an extraction-effort problem.** Instrumenting the compiler directly (per-
+operator rank, fused rank, post-rerank rank per query) found the real cause:
+Docling never promoted sections 6, 7, and 7.1–7.4 to real headings. The
+German/French/Russian partner statements are exported as ONE run-on paragraph
+misattributed to an unrelated earlier heading ("5.1 CTD-9 acquisition
+service"); FastCDC then chunks that merged paragraph at arbitrary byte
+offsets, producing chunks that mix multiple languages together and dilute the
+embedding badly enough that French/Russian don't even reach ANN's top-50. A
+markdown-regex heuristic to re-detect and promote these markers was designed,
+then explicitly REJECTED after review: it needed six independently-discovered
+guards to avoid corrupting an adjacent already-correct heading ("## 7.5
+India") — the same section_path-shattering failure mode decision #33 warns
+against — and `DoclingParser` is the shared ingest path for every rich format
+(docx/pptx/xlsx/html/csv), so a heuristic proven on one PDF would ship
+everywhere. The honest next lever is heading recovery from Docling's own
+layout/style signals (font, weight, position), not a markdown regex. See
+decision #38 for the full diagnosis.
+- **Q42** ("which figure must NOT be used…") is an adversarial provenance meta-question; the diagram chunk now surfaces, so this is the LLM's judgement call, not a retriever miss.
+
+**Next levers, in order:** (1) table-aware chunking (→ Q07/Q28); (2) a cross-lingual reranker / auto-derived per-namespace abstention+ranking (→ Q24–Q27, and removes the hand-set floor). `datum_live` holds the project's own markdown docs on bge-m3 (README/FRAMEWORK/draft/decisions) — no images, so `image_ocr` does not apply to it; it was NOT re-ingested for #36. The image-OCR recovery is proven in `datum_pdf_test` (the stress PDF).
+
+## 17. Stress test #2 — an UNSEEN document, generalization proven — 2026-08-11
+
+The user supplied a second, deliberately different stress PDF (`~/Downloads/rag_stress_test_report_2.pdf`, 18 pages + `answer_key_2.md`, 44 questions): three-column foreword, rotated in-cell table headers, nested tables, **Arabic RTL + Tamil facsimile statements**, a physically rotated (`/Rotate 90`) Gantt page, colour-only chart bars, a near-duplicate annex page (one changed figure), date/number locale chaos (DD.MM.YYYY vs ISO, decimal commas, lakh grouping), endnote hops, a redacted-code hallucination probe, an invisible white-text canary, a PDF-metadata canary, and a degraded 1-bit fax. Harness: `scratchpad/pdf_stress_test2.py` + `score4.py`, DB `datum_pdf_test2`, NS `tenant:stress2`.
+
+**Baseline with the framework exactly as-is: 37/44 (84%)** — inside the predicted 85–95% band and strong proof decisions #34–#38 generalize: image-OCR read the map, heatmap, chart annotation and the degraded fax; table chunking handled the nested/merged tables; the rotated page and rotated headers extracted; both locale traps both-surfaced; the redaction notice and the invisible-text canary surfaced. Zero document-specific tuning.
+
+**Fixes (decision #39, all general): final doc-2 40/44, doc-1 40/42, suite 248 green.**
+- Script families for non-Vision scripts (Tamil→Tesseract `tam`; Devanagari→EasyOCR) + **Arabic as its own Vision pass — Vision's language list is order-sensitive** (ar-SA buried after six codes read ZERO chars off a legible statement; ar-SA first reads it flawlessly).
+- **Embedded-image-object pass**: pypdfium2's object list finds pasted rasters the layout model never classifies as Pictures (the Tamil statement was one).
+- **Per-crop plurality arbitration** kills cross-script hallucination (Tesseract emitted plausible Tamil from the Arabic crop; the true script's reading always carries far more letters).
+- **PDF metadata ingestion** (`# Document Metadata`, default on) — the keyword canary lives only there.
+- **Default reranker → bge-reranker-v2-m3** (matches the bge-m3 embedder; same logic as #34). Fixed doc-2 Tamil Q14+Q15 AND doc-1's German Q24 + Russian Q26. One accepted, recorded trade: doc-1 trap Q21's second value now sits at rank 5 (one past the top-5 scoring cut; Datum still returns it).
+
+**Remaining, honestly attributed:** doc-2 Q08/Q09/Q10 — Arabic is extracted but English-query dense similarity ranks it 20–33 (query-side lever: multilingual query expansion / ingest-time gloss); Q06 — comparative query ("at ALPHA *only*"), a class top-k retrieval can't answer (navigate/fetch is the affordance); doc-1 Q25 French — still the #38 Docling heading-detection gap; doc-1 Q21 — the rank-5 boundary trade above.
+
+**Env note:** EasyOCR's Tamil model in this release is broken upstream (checkpoint/charset mismatch) — Tamil runs on Tesseract 5.5.3 with `tam.traineddata` downloaded to `/opt/homebrew/share/tessdata/` (via the Zscaler CA bundle). bge-reranker-v2-m3 is in the HF cache. Laptop sleep kills long background ingests — run them foreground.

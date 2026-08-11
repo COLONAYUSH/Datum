@@ -259,6 +259,13 @@ built on top of the reviewed code.
 
 Add one line per update, newest first. Date, who, what.
 
+- **2026-08-11** — Paper revised with measured results (two adversarial test documents, BEIR SciFact,
+  258 tests) and then swept for tone. The sweep caught seven verbless "Score, N of M" fragments, a
+  duplicated paragraph in Section 7 where a revision was added above the paragraph it should have
+  replaced, and a semicolon-chained list. Lesson for future paper edits, a revision pass that adds a
+  reworked paragraph must delete the original in the same edit, and every new section gets checked
+  against STYLE.md before the PDF is rebuilt. Docling is now named in prose (it was already named in
+  a code sketch, so the generic phrasing hid nothing). PDF rebuilt with pandoc and tectonic.
 - **2026-08-10** — Created this file. Consolidated every process learning from the research phase,
   the foundation and kernel work, the adversarial review, Milestones A through C, and the
   environment, packaging, and Git setup. Seeded the ten headline lessons and the do/do-not playbook.
