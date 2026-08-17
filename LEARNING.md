@@ -200,6 +200,29 @@ built on top of the reviewed code.
 
 ## Environment and tooling gotchas
 
+- **Bolt-on OCR fixes as much as it breaks.** Giving LangChain the full Unstructured hi_res OCR
+  stack recovered nine image questions and broke seven previously-passing footnote, list, and
+  table questions because element segmentation scrambles fine-grained text order. Extraction
+  quality is compositional. Recovered text must land without displacing text that was already
+  correct, so never evaluate an extraction change by the questions it fixes alone.
+- **Frameworks can silently misparse their input.** LlamaIndex's default reader, missing its
+  optional file package, indexed raw PDF bytes as text and scored 0/44 without raising anything.
+  Validate extraction output before trusting any pipeline, never assume a loader loaded.
+- **Benchmark artifacts belong in the repo, never in a scratchpad.** The original SciFact harness
+  and its dataset copy lived in a session temp directory and were wiped by cleanup, leaving the
+  paper citing a script that no longer existed. The harness now lives at `scripts/beir_scifact.py`
+  with the dataset download built in. Rule going forward, any script or data behind a published
+  number gets checked in the same day the number is produced.
+- **Zscaler TLS interception breaks HuggingFace downloads** (certifi does not trust the corporate
+  CA even though the OS does). Fix, set `SSL_CERT_FILE=/opt/homebrew/etc/openssl@3/cert.pem` and
+  `REQUESTS_CA_BUNDLE` to the same path. This is extending trust to a CA the system already
+  trusts, not bypassing verification. Without it, cached models still load after retry storms,
+  but new downloads fail outright.
+- **HNSW index builds are stochastic.** Re-running the identical SciFact config landed 0.6936 vs
+  the recorded 0.6968. Treat about ±0.003 nDCG as the noise band at this corpus size, and never
+  read a difference that small as a real improvement or regression.
+- **macOS sleep stalls long background runs.** A benchmark that should have taken 25 minutes took
+  200 because the laptop napped. Pin the machine awake for the duration with `caffeinate -w <pid>`.
 - **PostgreSQL and pgvector.** Datum needs Postgres 17 with the `vector` extension. On the build
   machine pgvector was not present at first, and the Homebrew formula's Postgres dependency was
   ambiguous (it risked installing a second Postgres). It was **built from source against the running
@@ -259,6 +282,34 @@ built on top of the reviewed code.
 
 Add one line per update, newest first. Date, who, what.
 
+- **2026-08-17 (Section 7 move)** — The paper's "What we have not proven" section moved out of
+  the paper into `docs/INTERNAL-AUDIT.md` at the user's direction, expanded into a standing
+  internal audit (test provenance, environment specificity, benchmark coverage, open failures,
+  variance, novelty ledger, standing assumptions). The paper keeps its prior-art credits in
+  Sections 5 and 6, the tests-ahead list in 6.7, and one plain limitations sentence in the
+  conclusion so it does not overclaim by omission. Update the audit whenever a claim changes.
+- **2026-08-17 (later still)** — Head-to-head measured, Datum vs LangChain, LlamaIndex, Haystack
+  on both adversarial documents with parity models and one shared reranker (validated scorer,
+  unmodified). Totals A/B, Datum 40/43, LangChain 30/34, LlamaIndex 32/34, Haystack 32/35,
+  LangChain+OCR 32/34. Findings, bolt-on OCR nets about zero (9 recovered, 7 broken), and
+  LlamaIndex's default reader silently indexes raw PDF bytes. Paper gained Section 6.5, Table 3,
+  and Figure 11 (fig12-head-to-head.svg); old 6.5/6.6 renumbered to 6.6/6.7. Decision #46.
+  Artifacts in benchmarks/adversarial/competitors/RESULTS.md.
+- **2026-08-17 (later)** — Adversarial-benchmark scorer rebuilt into the repo
+  (`benchmarks/adversarial/`, questions JSON + score.py + run_datum.py) and validated. Committed
+  numbers reproduce on the committed corpora (Doc A 40/42 three ways, Doc B 44/44 on original
+  vectors). New lesson, boundary questions sit inside embedding/index-build variance, a fresh
+  ingest today scores Doc B 43/44 because one chunk moved from rank 4 to past rank 10 with
+  byte-identical text. Same lesson as the SciFact ±0.003 band, rank-boundary results near the
+  cutoff are noise-sensitive. Any head-to-head comparison must use same-day fresh runs for every
+  system, Datum included, and the paper should quote fresh-run numbers.
+- **2026-08-17** — SciFact re-measured through a rebuilt, repo-resident harness
+  (`scripts/beir_scifact.py`) after the original scratchpad harness and dataset were lost to temp
+  cleanup. Reproduction of the old config landed 0.6936 (vs 0.6968 recorded, HNSW build variance).
+  The English embedder profile (bge-large-en-v1.5) measured nDCG@10 0.714, recall@10 0.840,
+  1.57 s/query, above every baseline named in the paper's table. Paper, figure, and PDF updated to
+  the measured number. New gotchas recorded, Zscaler SSL fix, HNSW noise band, caffeinate for long
+  runs, benchmark-artifacts-in-repo rule. Decision #45.
 - **2026-08-11** — Paper revised with measured results (two adversarial test documents, BEIR SciFact,
   258 tests) and then swept for tone. The sweep caught seven verbless "Score, N of M" fragments, a
   duplicated paragraph in Section 7 where a revision was added above the paragraph it should have

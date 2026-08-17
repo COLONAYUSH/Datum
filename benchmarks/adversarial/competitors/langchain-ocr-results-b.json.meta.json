@@ -1,0 +1,18 @@
+{
+ "framework": "langchain",
+ "loader": "unstructured-hires",
+ "pipeline": "UnstructuredPDFLoader(strategy=hi_res, mode=single) + RecursiveCharacterTextSplitter(1000/200) + FAISS",
+ "embed_model": "BAAI/bge-m3",
+ "rerank_model": "BAAI/bge-reranker-v2-m3",
+ "retrieve_k": 16,
+ "final_k": 5,
+ "n_documents": 1,
+ "n_chunks": 38,
+ "ingest_load_s": 33.3,
+ "ingest_embed_s": 21.43,
+ "ingest_total_s": 54.73,
+ "query_retrieve_s": 2.37,
+ "query_rerank_s": 39.77,
+ "query_total_s": 42.13,
+ "errors": []
+}

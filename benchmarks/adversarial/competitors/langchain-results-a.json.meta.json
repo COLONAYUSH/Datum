@@ -1,0 +1,18 @@
+{
+ "framework": "langchain",
+ "loader": "pypdf",
+ "pipeline": "PyPDFLoader + RecursiveCharacterTextSplitter(1000/200) + FAISS",
+ "embed_model": "BAAI/bge-m3",
+ "rerank_model": "BAAI/bge-reranker-v2-m3",
+ "retrieve_k": 16,
+ "final_k": 5,
+ "n_documents": 19,
+ "n_chunks": 42,
+ "ingest_load_s": 0.2,
+ "ingest_embed_s": 21.97,
+ "ingest_total_s": 22.17,
+ "query_retrieve_s": 2.17,
+ "query_rerank_s": 35.14,
+ "query_total_s": 37.3,
+ "errors": []
+}

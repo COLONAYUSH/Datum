@@ -17,7 +17,7 @@ record, or schedule the outcomes of the two Milestone B adversarial reviews —
 the now-implemented unconditional audit trail that #27 deferred); 31 the
 multi-format DoclingParser (task #30) and its environment-honest benchmark;
 32 the Milestone D end-to-end MCP acceptance over the real transport; 33 the
-MarkdownParser code-fence heading fix that Milestone D dogfooding surfaced; 34 the bge-m3 default embedder + per-deployment abstention floor from the PDF stress test; 35 the ocrmac OCR default (its picture-text/VLM-frontier conclusion later CORRECTED by 36); 36 the image-OCR composition that recovers picture/chart/facsimile/Devanagari text Docling's markdown export drops; 37 table-aware chunking (header-carrying row-groups) for large paginated tables; 38 the rerank-pool coverage guarantee that closes an RRF fusion blind spot, and the honest diagnosis of the remaining Docling heading-detection gap it does NOT fix; 39 stress test #2 (unseen document): script families (Arabic/Tamil), the embedded-image-object pass, per-crop plurality arbitration, PDF metadata ingestion, and the bge-reranker-v2-m3 default that matches the multilingual embedder; 40 the 20-family multilingual roster (readback-verified, 18 strong + 2 weak) with the sparse-gate + noise-floor that keep a broad default hallucination-free; 41 LLM-free contextual retrieval (section-path-prefixed view inputs) + the labeled NLLB ingest gloss — doc-2 44/44; 42 the first public-benchmark validation (BEIR SciFact nDCG@10 = 0.697 — above BM25/ColBERTv2, at SPLADE++ level, zero-shot through the full governed pipeline); 43 the VisionDescriber slot (pluggable picture understanding, provenance-labeled; local small VLMs measured unusable — the slot is the enterprise value); 44 the relevance-feedback loop (signed-token judgments, promotion-gated calibration, per-namespace overrides visible in EXPLAIN).
+MarkdownParser code-fence heading fix that Milestone D dogfooding surfaced; 34 the bge-m3 default embedder + per-deployment abstention floor from the PDF stress test; 35 the ocrmac OCR default (its picture-text/VLM-frontier conclusion later CORRECTED by 36); 36 the image-OCR composition that recovers picture/chart/facsimile/Devanagari text Docling's markdown export drops; 37 table-aware chunking (header-carrying row-groups) for large paginated tables; 38 the rerank-pool coverage guarantee that closes an RRF fusion blind spot, and the honest diagnosis of the remaining Docling heading-detection gap it does NOT fix; 39 stress test #2 (unseen document): script families (Arabic/Tamil), the embedded-image-object pass, per-crop plurality arbitration, PDF metadata ingestion, and the bge-reranker-v2-m3 default that matches the multilingual embedder; 40 the 20-family multilingual roster (readback-verified, 18 strong + 2 weak) with the sparse-gate + noise-floor that keep a broad default hallucination-free; 41 LLM-free contextual retrieval (section-path-prefixed view inputs) + the labeled NLLB ingest gloss — doc-2 44/44; 42 the first public-benchmark validation (BEIR SciFact nDCG@10 = 0.697 — above BM25/ColBERTv2, at SPLADE++ level, zero-shot through the full governed pipeline); 43 the VisionDescriber slot (pluggable picture understanding, provenance-labeled; local small VLMs measured unusable — the slot is the enterprise value); 44 the relevance-feedback loop (signed-token judgments, promotion-gated calibration, per-namespace overrides visible in EXPLAIN); 45 the repo-resident SciFact harness (scripts/beir_scifact.py) + the re-measured result (bge-large English profile, nDCG@10 0.714, above all named baselines) after the original scratchpad harness was lost. 46 the adversarial head-to-head (Datum 83/86 fresh vs LangChain 64, LlamaIndex 66, Haystack 67, LC+OCR 66 — parity models, shared reranker; bolt-on OCR nets ~zero; LlamaIndex default reader silently indexes raw PDF bytes).
 
 ## 1. `WriteOp` is a value type, not an executor Protocol
 
@@ -1160,3 +1160,68 @@ into noise. Three pieces, all tested end-to-end against real Postgres:
 
 Suite 258 green; both stress corpora re-verified unchanged (doc-1 40/42,
 doc-2 44/44) — the loop is strictly additive until feedback earns a change.
+
+## 45. SciFact re-measured through the repo harness: 0.714 with the English embedder profile
+
+The original BEIR SciFact harness (decision #42) lived in a session scratchpad
+and was lost to temp cleanup along with its dataset copy — the paper cited a
+script that no longer existed. Rebuilt as `scripts/beir_scifact.py` IN THE
+REPO, with the official BEIR dataset download built in and the embedder
+selectable by flag. Two runs, both end to end through the full governed
+pipeline (write path, tenancy, conformance, rerank, audit trace; sufficiency
+threshold zero, disclosed):
+
+- **Reproduction of #42's config (bge-m3 default): nDCG@10 = 0.6936,
+  recall-any@10 = 0.8033** — vs #42's recorded 0.6968/0.807. Delta ~0.003 is
+  HNSW index-build variance (pgvector HNSW construction is stochastic);
+  treat ±0.003 as the noise band for this benchmark at this corpus size.
+- **English profile (bge-large-en-v1.5, dim 1024, bge-v1.5 query prefix):
+  nDCG@10 = 0.7139, recall-any@10 = 0.840, 1.57 s/query CPU** — above every
+  baseline named in the paper's table (BM25 0.665, ColBERTv2 0.693,
+  SPLADE++ 0.699). Still below the 0.72–0.76 published by the largest
+  specialized models; the paper keeps saying so.
+
+The embedder choice is a deployment profile, not benchmark tuning: bge-large
+is the documented stronger English retrieval model (public priors), chosen
+because SciFact is English-only; bge-m3 stays the shipping default for
+mixed-language corpora (decision #34 unchanged). Paper Table 2 / Figure 10 /
+abstract updated to the measured 0.714. Raw results in `docs/bench/`.
+
+Environment notes that cost real time, recorded so they never do again:
+Zscaler TLS interception breaks huggingface_hub's certifi-based SSL — fix is
+`SSL_CERT_FILE=/opt/homebrew/etc/openssl@3/cert.pem` (and REQUESTS_CA_BUNDLE),
+which points it at the bundle that already trusts the corporate CA. Long runs
+on a laptop stall when macOS sleeps — pin with `caffeinate -w <pid>`.
+
+## 46. The adversarial head-to-head: Datum vs LangChain, LlamaIndex, Haystack
+
+Both test documents were run through the three most widely used open-source
+RAG frameworks under parity rules designed to isolate framework machinery
+from model choice: bge-m3 embeddings everywhere, each system retrieves its
+top 16, ONE shared external CrossEncoder (bge-reranker-v2-m3) cuts every
+system's 16 to the 5 the validated scorer sees, queries verbatim, zero-shot,
+each framework on its documented standard PDF pipeline. Scored by the
+unmodified benchmarks/adversarial/score.py.
+
+**Totals (doc A / doc B): Datum 40/42, 43/44 · LangChain 30, 34 ·
+LlamaIndex 32, 34 · Haystack 32, 35 · LangChain + Unstructured hi_res OCR
+32, 34.** Datum's fresh-index numbers are used (43 not 44 on doc B) because
+every competitor also ran on a fresh index.
+
+Two headline findings beyond the totals:
+1. **Bolt-on OCR nets ~zero.** The hi_res config recovered 9 image/scan
+   questions and broke 7 previously-passing footnote/list/table questions
+   (element segmentation scrambles fine-grained text order). Extraction
+   quality is compositional, not a flag.
+2. **A framework can silently misparse its input.** LlamaIndex's default
+   reader without its optional file package read raw PDF bytes as text
+   (0/44, preserved as llamaindex-results-b-rawfallback.json) and crashed on
+   the other document. Scored runs used its documented per-page PDF
+   extractor. Haystack 3.0's core lacks its local embedder component; the
+   identical SentenceTransformer call its wrapper makes was substituted,
+   everything else pure Haystack.
+
+Full grids, versions, timings, rerun commands, and preserved failure
+artifacts: benchmarks/adversarial/competitors/RESULTS.md. Paper updated
+(new Section 6.5, Table 3, Figure 11 = figures/fig12-head-to-head.svg;
+old 6.5/6.6 -> 6.6/6.7, feedback figure -> Figure 12).

@@ -1,0 +1,46 @@
+ID    kind      result detail
+------------------------------------------------------------------------
+Q01   single    PASS   hit
+Q02   single    PASS   hit
+Q03   single    PASS   hit
+Q04   single    PASS   hit
+Q05   single    PASS   hit
+Q06   single    PASS   hit
+Q07   single    PASS   hit
+Q08   single    PASS   hit
+Q09   conflict  FAIL   value1=hit value2=MISS
+Q10   single    PASS   hit
+Q11   single    PASS   hit
+Q12   single    PASS   hit
+Q13   single    PASS   hit
+Q14   single    PASS   hit
+Q15   single    PASS   hit
+Q16   single    PASS   hit
+Q17   single    PASS   hit
+Q18   single    PASS   hit
+Q19   single    PASS   hit
+Q20   single    PASS   hit
+Q21   conflict  FAIL   value1=hit value2=MISS
+Q22   single    PASS   hit
+Q23   single    PASS   hit
+Q24   single    PASS   hit
+Q25   single    PASS   hit
+Q26   single    PASS   hit
+Q27   single    PASS   hit
+Q28   single    PASS   hit
+Q29   single    PASS   hit
+Q30   conflict  PASS   value1=hit value2=hit
+Q31   single    PASS   hit
+Q32   single    PASS   hit
+Q33   single    PASS   hit
+Q34   single    PASS   hit
+Q35   single    PASS   hit
+Q36   single    PASS   hit
+Q37   single    PASS   hit
+Q38   single    PASS   hit
+Q39   single    PASS   hit
+Q40   conflict  PASS   value1=hit value2=hit
+Q41   single    PASS   hit
+Q42   single    PASS   hit
+------------------------------------------------------------------------
+TOTAL: 40/42

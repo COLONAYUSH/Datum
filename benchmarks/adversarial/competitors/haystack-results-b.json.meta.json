@@ -1,0 +1,18 @@
+{
+ "framework": "haystack",
+ "pipeline": "PyPDFToDocument + DocumentCleaner + DocumentSplitter (defaults) + InMemoryDocumentStore embedding retriever",
+ "embedder_note": "haystack-ai 3.0.0 core has no local embedder (SentenceTransformers embedders moved to the uninstalled sentence-transformers-haystack package; pip permission-blocked). Embeddings computed directly with sentence_transformers encode() — identical to Haystack's own wrapper — and attached to Haystack Documents.",
+ "embed_model": "BAAI/bge-m3",
+ "rerank_model": "BAAI/bge-reranker-v2-m3",
+ "retrieve_k": 16,
+ "final_k": 5,
+ "n_documents": 1,
+ "n_chunks": 21,
+ "ingest_load_s": 0.12,
+ "ingest_embed_s": 15.82,
+ "ingest_total_s": 15.94,
+ "query_retrieve_s": 1.58,
+ "query_rerank_s": 42.79,
+ "query_total_s": 44.37,
+ "errors": []
+}

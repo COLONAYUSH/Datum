@@ -1,0 +1,17 @@
+{
+ "framework": "llamaindex",
+ "pipeline": "SimpleDirectoryReader + default SentenceSplitter + VectorStoreIndex (in-memory)",
+ "reader_note": "llama-index-readers-file missing from the venv (llama-index 0.14.23 meta-package did not install it; pip permission-blocked). Without it SimpleDirectoryReader silently reads PDFs as plain text (raw %PDF bytes) — doc A then crashed nltk punkt with RecursionError (llamaindex-a-defaultcrash.log). Used the documented file_extractor hook with a pypdf-per-page reader identical to the official PDFReader.",
+ "embed_model": "BAAI/bge-m3",
+ "rerank_model": "BAAI/bge-reranker-v2-m3",
+ "retrieve_k": 16,
+ "final_k": 5,
+ "n_documents": 19,
+ "ingest_load_s": 0.17,
+ "ingest_embed_s": 2.92,
+ "ingest_total_s": 3.09,
+ "query_retrieve_s": 4.78,
+ "query_rerank_s": 86.94,
+ "query_total_s": 91.72,
+ "errors": []
+}

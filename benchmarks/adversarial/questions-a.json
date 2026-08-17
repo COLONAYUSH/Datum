@@ -1,0 +1,270 @@
+{
+  "document": "document-a.pdf",
+  "answer_key": "document-a-answer-key.md",
+  "questions": [
+    {
+      "id": "Q01",
+      "query": "What is the name of the consortium's deep-sea research station?",
+      "kind": "single",
+      "match": [["halcyon deep"]]
+    },
+    {
+      "id": "Q02",
+      "query": "Which submersible completed all crewed sorties in FY2025?",
+      "kind": "single",
+      "match": [["nereid-2"]]
+    },
+    {
+      "id": "Q03",
+      "query": "What operational availability did the station achieve in FY2025?",
+      "kind": "single",
+      "match": [["96.4"]]
+    },
+    {
+      "id": "Q04",
+      "query": "What is the hull design pressure of the station and which body certified it?",
+      "kind": "single",
+      "match": [["62 mpa", "bureau abyssal"]]
+    },
+    {
+      "id": "Q05",
+      "query": "How many FTE tether and winch technicians are on the roster?",
+      "kind": "single",
+      "match": [["winch technicians", "3"]]
+    },
+    {
+      "id": "Q06",
+      "query": "From which partner is the ROV supervisor post seconded?",
+      "kind": "single",
+      "match": [["seconded", "kaiyu-7"]]
+    },
+    {
+      "id": "Q07",
+      "query": "For dive D-2025-018, state the pilot, max depth, duration and samples taken.",
+      "kind": "single",
+      "match": [["d-2025-018", "fernandez", "5,204", "6:42"]]
+    },
+    {
+      "id": "Q08",
+      "query": "How many dives in total are recorded in the FY2025 dive log?",
+      "kind": "single",
+      "match": [["46 sorties"], ["46 crewed"], ["46 dives"]]
+    },
+    {
+      "id": "Q09",
+      "query": "How many crewed dives took place in the third quarter of 2025?",
+      "kind": "conflict",
+      "match": [
+        [["fourteen crewed"]],
+        [["d-2025-", "jul"], ["d-2025-", "aug"], ["d-2025-", "sep"]]
+      ]
+    },
+    {
+      "id": "Q10",
+      "query": "After dive D-2025-042, what failure mode was the reduced-speed tether rewind intended to avoid?",
+      "kind": "single",
+      "match": [["birdcaging"]]
+    },
+    {
+      "id": "Q11",
+      "query": "How many Mollusca specimens were catalogued in FY2025?",
+      "kind": "single",
+      "match": [["mollusca", "149"]]
+    },
+    {
+      "id": "Q12",
+      "query": "What was the water temperature at 3,000 m on CTD cast MT-25-118?",
+      "kind": "single",
+      "match": [["2.4", "3,000 m"]]
+    },
+    {
+      "id": "Q13",
+      "query": "What length do mature colonies of Apolemia spectra reach?",
+      "kind": "single",
+      "match": [["mature", "6.8"]]
+    },
+    {
+      "id": "Q14",
+      "query": "On how many occasions were juvenile Apolemia spectra colonies observed?",
+      "kind": "single",
+      "match": [["eleven occasions"]]
+    },
+    {
+      "id": "Q15",
+      "query": "Under what submission number and date were the new-species files lodged with the Registry of Hadal Taxa?",
+      "kind": "single",
+      "match": [["rht-2025-0917"]]
+    },
+    {
+      "id": "Q16",
+      "query": "What hydrostatic pressure results at station depth using P = P0 + rho*g*h?",
+      "kind": "single",
+      "match": [["53.4"]]
+    },
+    {
+      "id": "Q17",
+      "query": "What is the value of DEPTH_ALARM_M in the ctd9d firmware?",
+      "kind": "single",
+      "match": [["depth_alarm_m", "5300"]]
+    },
+    {
+      "id": "Q18",
+      "query": "Which CRC polynomial does the winch controller firmware use?",
+      "kind": "single",
+      "match": [["0x1021"]]
+    },
+    {
+      "id": "Q19",
+      "query": "What is the maximum permitted clock skew to the surface in the pre-dive checklist?",
+      "kind": "single",
+      "match": [["clock skew", "40 ms"]]
+    },
+    {
+      "id": "Q20",
+      "query": "What was the FY2025 ACTUAL expenditure on Research Programmes?",
+      "kind": "single",
+      "match": [["8,660"]]
+    },
+    {
+      "id": "Q21",
+      "query": "What was total consortium expenditure in FY2025?",
+      "kind": "conflict",
+      "match": [
+        [["47.2"]],
+        [["45,800"]]
+      ]
+    },
+    {
+      "id": "Q22",
+      "query": "What percentage of FY2025 expenditure went to Vessel Operations?",
+      "kind": "single",
+      "match": [["vessel operations", "35%"]]
+    },
+    {
+      "id": "Q23",
+      "query": "What is the rated diving depth of the Kaiyu-7 ROV?",
+      "kind": "single",
+      "match": [["6,500"]]
+    },
+    {
+      "id": "Q24",
+      "query": "What operating pressure are the second-generation titanium pressure housings rated for, and when were they handed over?",
+      "kind": "single",
+      "match": [["11. märz 2025"], ["11 march 2025"], ["62 mpa", "bremerhaven"]]
+    },
+    {
+      "id": "Q25",
+      "query": "How many sonar arrays did the French institute supply, and what is the model name and nominal range?",
+      "kind": "single",
+      "match": [["écho-marin"], ["1800 mètres"]]
+    },
+    {
+      "id": "Q26",
+      "query": "What is the name and ice class of the Russian supply vessel?",
+      "kind": "single",
+      "match": [["северная звезда", "arc5"]]
+    },
+    {
+      "id": "Q27",
+      "query": "During the monsoon period, how often is surface resupply possible?",
+      "kind": "single",
+      "match": [["six weeks", "monsoon"]]
+    },
+    {
+      "id": "Q28",
+      "query": "What part number caused the Wet Porch flooding incident IR-2025-04, and how much downtime resulted?",
+      "kind": "single",
+      "match": [["hx-1147", "62 h"]]
+    },
+    {
+      "id": "Q29",
+      "query": "According to the 1998 memorandum, what was the preliminary depth estimate and which vessel took the sounding?",
+      "kind": "single",
+      "match": [["5,340", "uncorrected"], ["5,340", "thalassa"]]
+    },
+    {
+      "id": "Q30",
+      "query": "Why does the 1998 depth figure differ from the current certified station depth?",
+      "kind": "conflict",
+      "match": [
+        [["5,340"]],
+        [["5,210"]]
+      ]
+    },
+    {
+      "id": "Q31",
+      "query": "On requisition REQ-7741, what are the unit cost, total, and priority?",
+      "kind": "single",
+      "match": [["18,400", "36,800", "urgent"]]
+    },
+    {
+      "id": "Q32",
+      "query": "What chunk size does the mtrc-ingest pipeline use?",
+      "kind": "single",
+      "match": [["chunk_size_kb", "512"], ["mtrc-ingest", "512"]]
+    },
+    {
+      "id": "Q33",
+      "query": "How long is raw acoustic (hydrophone) data retained?",
+      "kind": "single",
+      "match": [["acoustic", "25 years"]]
+    },
+    {
+      "id": "Q34",
+      "query": "When does Benthic Disturbance Permit BD-2025-114 expire?",
+      "kind": "single",
+      "match": [["30 jun 2027"], ["30 june 2027"], ["2027-06-30"]]
+    },
+    {
+      "id": "Q35",
+      "query": "What triggers the ANDON PROTOCOL and what does it authorise?",
+      "kind": "single",
+      "match": [["andon", "90 seconds"]]
+    },
+    {
+      "id": "Q36",
+      "query": "What is the CTD-9 conductivity cell constant (kappa) and its calibration date?",
+      "kind": "single",
+      "match": [["0.9821", "2025-01-19"]]
+    },
+    {
+      "id": "Q37",
+      "query": "In which storage jar is holotype accession MTRC-B-0442 held, and what taxon is it?",
+      "kind": "single",
+      "match": [["hirondellea", "jar 17"]]
+    },
+    {
+      "id": "Q38",
+      "query": "According to the station layout diagram, which module contains Laboratories 1-3?",
+      "kind": "single",
+      "match": [["module e", "laboratories"]]
+    },
+    {
+      "id": "Q39",
+      "query": "Who is the consortium's Chief Engineer?",
+      "kind": "single",
+      "match": [["priya raghunathan"]]
+    },
+    {
+      "id": "Q40",
+      "query": "What is the station's depth?",
+      "kind": "conflict",
+      "match": [
+        [["5,120 metres"]],
+        [["5,210"]]
+      ]
+    },
+    {
+      "id": "Q41",
+      "query": "What URL is given for the report's data portal?",
+      "kind": "single",
+      "match": [["data.mtrc-consortium.example/ar2025"]]
+    },
+    {
+      "id": "Q42",
+      "query": "Which figure must NOT be used to answer 'how many berths does Module B provide' from text alone, and what is the value?",
+      "kind": "single",
+      "match": [["22 berths"]]
+    }
+  ]
+}

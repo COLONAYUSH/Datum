@@ -1,0 +1,8 @@
+{
+  "task": "BEIR SciFact",
+  "embedder": "bge-large",
+  "queries": 300,
+  "ndcg@10": 0.7139,
+  "recall_any@10": 0.84,
+  "sec_per_query": 1.57
+}
