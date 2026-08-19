@@ -23,7 +23,7 @@ through a metadata filter.
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white)](pyproject.toml)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17%20%2B%20pgvector-336791.svg?logo=postgresql&logoColor=white)](#requirements)
-[![Tests](https://img.shields.io/badge/tests-219%20passing-brightgreen.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-258%20passing-brightgreen.svg)](#testing)
 [![Typed](https://img.shields.io/badge/typing-PEP%20561-blue.svg)](src/datum/py.typed)
 [![MCP](https://img.shields.io/badge/MCP-compatible-000000.svg)](#use-it-from-an-agent-mcp)
 [![Status](https://img.shields.io/badge/status-pre--1.0-orange.svg)](#project-status)
@@ -48,17 +48,17 @@ through a metadata filter.
   DEMO: record a short terminal cast of `datum ingest` + `datum search` and save it as
   docs/assets/demo.gif (charmbracelet/vhs or asciinema both work well), then this shows it.
 -->
-<img alt="Datum ingest and search demo" src="docs/assets/demo.gif" width="760">
-
 </div>
 
 ---
 
 > [!IMPORTANT]
-> **Project status.** Datum is pre-1.0 and under active development. The foundation and the first
-> three build milestones are complete and verified against a real PostgreSQL: the walking skeleton,
-> the full hybrid retrieval pipeline (dense + BM25 + ANN, fused and reranked), and the evaluation
-> gate with abstention. It is not yet published to a package index, so install from source for now.
+> **Project status.** Datum is pre-1.0 and under active development. Every planned v1 milestone is
+> complete and verified against a real PostgreSQL: the walking skeleton, the full hybrid retrieval
+> pipeline (dense + BM25 + ANN, fused and reranked), the evaluation gate with abstention, MCP
+> acceptance over the real transport, multi-format ingestion with 20-script image OCR, and the
+> feedback loop. 258 tests, no mocked components. Benchmarks are measured and stored in-repo
+> (`benchmarks/`, `docs/bench/`). Not yet on a package index, so install from source for now.
 > The public API below is what the code does today.
 
 ## Contents
@@ -145,7 +145,7 @@ corpus does not support an answer.
   surface, so a citation points at where an answer actually lives.
 - 🧩 **Postgres is the only moving part.** pgvector and Postgres full-text carry the whole substrate.
   No separate vector database or search cluster to run.
-- 🤖 **Agent-native.** Ships as an MCP server with five read verbs, so a tool-calling model talks to
+- 🤖 **Agent-native.** Ships as an MCP server with six verbs, five for reading and one for feedback, so a tool-calling model talks to
   it directly.
 
 <div align="right"><a href="#contents">back to top</a></div>
@@ -229,7 +229,7 @@ sequenceDiagram
 | **L5** Physical operators | grep, BM25, and ANN. Each passes the conformance suite before it can register. |
 | **L6** Plan compiler | Resolves the ACL partition first, compiles a physical plan, fuses and reranks, persists the trace for EXPLAIN and replay. |
 | **L7** Evidence state | Typed evidence with a sufficiency estimate and a status that can abstain. |
-| **L8** Agent tool surface | The MCP server: five read verbs, principal from the session, opaque hit ids out. |
+| **L8** Agent tool surface | The MCP server: six verbs (five read + feedback), principal from the session, opaque hit ids out. |
 
 The kernel (`src/datum/kernel/`) is a small, version-frozen set of typed Protocols and frozen
 dataclasses with zero I/O. Everything else depends on it in one direction and never the reverse.
@@ -298,7 +298,7 @@ datum search "<query>" --namespace NS [--dsn DSN]
     Compile and run a retrieval; print ranked hits with their section paths.
 
 datum serve --namespace NS [--dsn DSN]
-    Run the MCP server over stdio (five read verbs). Point an MCP client at this.
+    Run the MCP server over stdio (six verbs). Point an MCP client at this.
 
 datum eval [--corpus-dir DIR] [--regression-set FILE] [--dsn DSN]
     Ingest a fixture corpus and run the curated regression set through the live
@@ -390,10 +390,10 @@ records and kept current incrementally. Because ingestion no-ops unchanged secti
 a write actually touched get re-derived.
 
 > [!NOTE]
-> Datum's default embedder is `BAAI/bge-small-en-v1.5` and its default reranker is
-> `BAAI/bge-reranker-base`, both small enough to run on a CPU. Both sit behind Protocols, so you can
-> pass a stronger local model or a hosted API to `Corpus.open(embedder=..., reranker=...)` without
-> touching anything else.
+> Datum's default embedder is `BAAI/bge-m3` (multilingual, 100+ languages) and its default reranker
+> is `BAAI/bge-reranker-v2-m3`, a matched multilingual pair, both small enough to run on a CPU.
+> Both sit behind Protocols, so you can pass a stronger local model or a hosted API to
+> `Corpus.open(embedder=..., reranker=...)` without touching anything else.
 
 <div align="right"><a href="#contents">back to top</a></div>
 
@@ -405,7 +405,7 @@ Datum speaks the Model Context Protocol. Run the server over stdio:
 datum serve --namespace tenant:acme
 ```
 
-It exposes five read verbs: `search`, `fetch`, `navigate`, `explain`, and `since`. The principal
+It exposes six verbs: `search`, `fetch`, `navigate`, `explain`, `since`, and `feedback`. The principal
 comes from the session, so it is never a tool argument a model could set, and what crosses the
 boundary is an opaque `hit_id` plus content, never a trust tier or authority.
 
@@ -501,9 +501,12 @@ This compares design properties, not benchmark numbers. It is about what the arc
 | Deletion | delete rows | `forget` with an erasure receipt, bitemporal history |
 
 > [!NOTE]
-> **On benchmarks.** Measured retrieval-quality and latency numbers are being finalized alongside the
-> paper, against a pre-registered evaluation plan with falsification criteria. This README does not
-> print performance figures it has not measured. What is verifiable today: the suite runs green
+> **On benchmarks.** Every number here is measured by a harness stored in this repository, and the
+> per-question results are committed alongside. Adversarial corpora (86 questions across two hostile
+> documents): Datum 40/42 and 44/44 native; under the same shared models, LangChain, LlamaIndex, and
+> Haystack score 64 to 67 of 86 (`benchmarks/adversarial/`). BEIR SciFact through the full governed
+> pipeline: nDCG@10 0.694 default, 0.714 with bge-large (`docs/bench/`, harness in
+> `scripts/beir_scifact.py`). What is also verifiable today: the suite runs green
 > against a real PostgreSQL (not mocks), and the concurrent-write race that drops updates in other
 > systems is closed by a two-writer concurrency test.
 
@@ -541,11 +544,16 @@ footnote to it.
 - [x] **Milestone A.** Walking skeleton: ingest, search, fetch, navigate, explain, since, replay, end to end.
 - [x] **Milestone B.** Hybrid retrieval: dense + BM25 + ANN, fused with weighted RRF, cross-encoder rerank, all through the conformance gate.
 - [x] **Milestone C.** Evaluation gate wired to the live corpus, dense-similarity abstention, concurrency hardening.
-- [ ] **Milestone D.** Acceptance against a real tool-calling model over MCP.
-- [ ] **Multi-format ingestion.** A Docling-backed parser for PDF, Office, images with OCR, and audio, with an all-format benchmark.
+- [x] **Milestone D.** Acceptance over the real MCP transport: a real client drives all six verbs against a served corpus, tenancy fail-closed, covered in `tests/mcp_server/test_serve_e2e.py`.
+- [x] **Multi-format ingestion.** Docling-backed parser for PDF, Office, HTML, CSV, and images, with an all-format benchmark test.
+- [x] **Multilingual image-text recovery.** 20 writing scripts across three OCR engines, readback-verified, with the sparse gate and plurality arbitration that keep a broad engine roster hallucination-free, plus a labeled NLLB translation gloss on non-Latin image text.
+- [x] **Contextual retrieval.** Every chunk indexed with its own section path prefixed (no model calls needed), plus table row-groups that repeat their header.
+- [x] **Adversarial benchmark.** Two hostile documents, 86 questions, mechanical scoring: Datum 40/42 and 44/44 native (43/44 under the shared head-to-head config); LangChain / LlamaIndex / Haystack score 64 to 67 of 86 with identical models (`benchmarks/adversarial/`).
+- [x] **Public benchmark.** BEIR SciFact end to end through the full pipeline: nDCG@10 0.694 with the default embedder, 0.714 with bge-large, both stored in `docs/bench/` with the harness at `scripts/beir_scifact.py`.
+- [x] **Relevance feedback loop.** A sixth MCP verb records judgments tied to their exact retrieval; `datum calibrate` grid-tunes per-tenant weights and thresholds, promotion-gated on held-out judgments. (The Phase-2 learned policy replaces the search, not the discipline.)
+- [x] **Vision-describer slot.** Any VLM behind a three-member Protocol; descriptions land labeled with the producing model. Ships proven and empty: no locally runnable small VLM was usable.
 - [ ] As-of (time-travel) queries over the bitemporal store.
 - [ ] Fine-grained, predicate-level access control.
-- [ ] Learned, safely-promotable plan selection.
 - [ ] Cryptographic-shred forgetting.
 
 <div align="right"><a href="#contents">back to top</a></div>
