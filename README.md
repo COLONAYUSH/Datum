@@ -5,7 +5,7 @@
 
 <div align="center">
 
-<img alt="Datum — measure, understand, build" src="docs/assets/datum-logo.png" width="420">
+<img alt="Datum — measure, understand, build" src="https://raw.githubusercontent.com/COLONAYUSH/Datum/main/docs/assets/datum-logo.png" width="420">
 
 <h1>Datum</h1>
 
@@ -52,7 +52,6 @@ through a metadata filter.
 
 ---
 
-> [!IMPORTANT]
 > **Project status.** Datum is pre-1.0 and under active development. Every planned v1 milestone is
 > complete and verified against a real PostgreSQL: the walking skeleton, the full hybrid retrieval
 > pipeline (dense + BM25 + ANN, fused and reranked), the evaluation gate with abstention, MCP
@@ -254,8 +253,14 @@ dataclasses with zero I/O. Everything else depends on it in one direction and ne
 ## Quickstart
 
 ```bash
-# 1. Install. Directly from GitHub (with the dense-retrieval extra):
+# 1. Install. Pick your profile:
+#    pip install datumrag            -> core: BM25 + grep retrieval, MCP + HTTP servers (a few MB)
+#    pip install 'datumrag[embed]'   -> + semantic search and reranking (adds PyTorch, ~3 GB) <- most people
+#    pip install 'datumrag[all]'     -> + PDF/Office/image parsing with OCR (Docling)
+# Missing extras never degrade silently: search without [embed] warns loudly and names the fix.
+# From PyPI (with the dense-retrieval extra):
 pip install 'datumrag[embed]'
+
 # ...or straight from GitHub:
 # pip install 'datumrag[embed] @ git+https://github.com/COLONAYUSH/Datum.git'
 # ...or clone for development:
@@ -283,8 +288,7 @@ status=ok  sufficiency=0.742  plan=pl_9f3c...
     To revert the release, pin the previous image tag and redeploy the production cluster.
 ```
 
-> [!TIP]
-> The test suite and `datum eval` **truncate whatever database `DATUM_PG_DSN` points at**. Always
+> > The test suite and `datum eval` **truncate whatever database `DATUM_PG_DSN` points at**. Always
 > point it at a throwaway database, never at one holding content you care about.
 
 For a step-by-step setup with troubleshooting (installing Postgres and pgvector, first-run model
@@ -394,8 +398,7 @@ The views the operators read (a BM25 index and a dense-vector index) are derived
 records and kept current incrementally. Because ingestion no-ops unchanged sections, only the chunks
 a write actually touched get re-derived.
 
-> [!NOTE]
-> Datum's default embedder is `BAAI/bge-m3` (multilingual, 100+ languages) and its default reranker
+> > Datum's default embedder is `BAAI/bge-m3` (multilingual, 100+ languages) and its default reranker
 > is `BAAI/bge-reranker-v2-m3`, a matched multilingual pair, both small enough to run on a CPU.
 > Both sit behind Protocols, so you can pass a stronger local model or a hosted API to
 > `Corpus.open(embedder=..., reranker=...)` without touching anything else.
@@ -530,8 +533,7 @@ This compares design properties, not benchmark numbers. It is about what the arc
 | Moving parts | vector DB + search engine + glue | one PostgreSQL |
 | Deletion | delete rows | `forget` with an erasure receipt, bitemporal history |
 
-> [!NOTE]
-> **On benchmarks.** Every number here is measured by a harness stored in this repository, and the
+> > **On benchmarks.** Every number here is measured by a harness stored in this repository, and the
 > per-question results are committed alongside. Adversarial corpora (86 questions across two hostile
 > documents): Datum 40/42 and 44/44 native; under the same shared models, LangChain, LlamaIndex, and
 > Haystack score 64 to 67 of 86 (`benchmarks/adversarial/`). BEIR SciFact through the full governed
@@ -560,8 +562,7 @@ footnote to it.
 - [The framework specification](design/FRAMEWORK.md), post red-team revision.
 - [The paper](paper/) that ties the failures to the design, with its figures and style rules.
 
-> [!NOTE]
-> The full study lives in [`research/`](research/), the rival designs and the judgment behind the
+> > The full study lives in [`research/`](research/), the rival designs and the judgment behind the
 > final one in [`design/`](design/), and the paper in [`paper/`](paper/). For continuation context,
 > see [`HANDOFF.md`](HANDOFF.md) (status and next steps) and [`LEARNING.md`](LEARNING.md) (every
 > lesson from building this).
@@ -624,8 +625,7 @@ createdb datum_dev && psql -d datum_dev -c "CREATE EXTENSION IF NOT EXISTS vecto
 pytest -q
 ```
 
-> [!TIP]
-> If you are adding a physical operator, the bar to clear is the conformance suite. Run
+> > If you are adding a physical operator, the bar to clear is the conformance suite. Run
 > `ConformanceSuite.run(YourOperator())` and make `report.passed` true before you wire it in. That is
 > the same gate the registry enforces at runtime.
 

@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 # Distribution name (what you `pip install`). The import stays `import datum`
 # and the CLI stays `datum` — distribution and import names are independent.
 name = "datumrag"
-version = "0.1.0"
+version = "0.1.1"
 description = "A retrieval substrate for AI agents: every query compiles to an explainable, replayable plan over one versioned, tenant-isolated store."
 readme = "README.md"
 requires-python = ">=3.11"
