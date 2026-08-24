@@ -3,7 +3,7 @@ name: Publish to PyPI
 # Publishes on version tags (v0.1.0, v0.2.0, ...). Uses PyPI Trusted
 # Publishing (OIDC) — no API token stored in the repo. One-time setup on
 # pypi.org: Project -> Settings -> Publishing -> add this repository,
-# workflow "publish.yml", environment "pypi".
+# workflow "publish.yaml", environment "pypi".
 on:
   push:
     tags: ["v*"]
