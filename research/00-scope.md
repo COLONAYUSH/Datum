@@ -52,5 +52,5 @@ LangChain+LangGraph · LlamaIndex · Haystack · DSPy · Microsoft GraphRAG (+fo
 - `research/02-frameworks/*.md` — 14 framework autopsies
 - `research/03-synthesis/*.md` — failure-dimension syntheses + `common-issues.md` (verified taxonomy)
 - `design/proposal-*.md` — 5 rival first-principles designs; `design/judgment.md`; `design/FRAMEWORK.md` (final spec)
-- `paper/outline.md` — paper skeleton mapping corpus → sections
+- paper outline (private `Datum-paper` repo) — paper skeleton mapping corpus → sections
 - `README.md` — index + executive summary

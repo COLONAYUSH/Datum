@@ -560,10 +560,10 @@ footnote to it.
 
 - [The taxonomy of common failures](research/03-synthesis/common-issues.md) (CI-01 through CI-27), each with evidence and a severity.
 - [The framework specification](design/FRAMEWORK.md), post red-team revision.
-- [The paper](paper/) that ties the failures to the design, with its figures and style rules.
+- The research paper that ties the failures to the design (private until publication).
 
 > > The full study lives in [`research/`](research/), the rival designs and the judgment behind the
-> final one in [`design/`](design/), and the paper in [`paper/`](paper/). For continuation context,
+> final one in [`design/`](design/); the paper is in a private repository until publication. For continuation context,
 > see [`HANDOFF.md`](HANDOFF.md) (status and next steps) and [`LEARNING.md`](LEARNING.md) (every
 > lesson from building this).
 

@@ -255,7 +255,7 @@ built on top of the reviewed code.
 - **Paper voice.** The paper and all human-facing prose avoid the usual AI tells: no em dashes, no
   mid-sentence setup colons, no clipped three-word fragments, no showy vocabulary, no "not just X but
   Y." Plain, complete, human sentences. Real diagrams and tables, never AI-generated images. See
-  `paper/STYLE.md`.
+  the paper's STYLE.md (private `Datum-paper` repo).
 - **No fabricated results.** Ever. Predicted numbers are clearly labeled as templates.
 - **Do not compromise quietly.** When something is genuinely blocked or a real tradeoff exists,
   surface it and ask. Do not silently pick the lesser solution.
@@ -274,7 +274,7 @@ built on top of the reviewed code.
 - `design/FRAMEWORK.md` — the full framework specification. The "MVP definition" section is the v1 scope.
 - `README.md` — what Datum is and how to install and use it.
 - `research/` — the study and the verified failure taxonomy the design answers.
-- `paper/` — the paper draft, its style rules, and the figures.
+- The paper draft, style rules, and figures live in the private `Datum-paper` repository.
 
 ---
 

@@ -10,7 +10,7 @@
 
 This project has three arcs, done in order:
 1. **Research** (DONE) — an exhaustive, adversarially-verified survey of RAG + a taxonomy of common framework failures. Lives in `research/`.
-2. **Paper** (FIRST DRAFT DONE) — a human-voiced research paper + typeset PDF arguing the failures and proposing the framework. Lives in `paper/`.
+2. **Paper** (FIRST DRAFT DONE) — a human-voiced research paper + typeset PDF arguing the failures and proposing the framework. Lives in the private `Datum-paper` repository (moved out of this repo pre-publication).
 3. **Build** (IN PROGRESS) — `Datum`, the actual framework, implemented and tested. Lives in `datum/`. **This is the active work.**
 
 **Where the build is: v1 is FEATURE-COMPLETE.** Milestones M0, A, **B (hybrid retrieval; §12)**, **C (eval gate + abstention + concurrency; §13)**, the **multi-format DoclingParser track (task #30; §14)**, and **D (MCP acceptance over the real transport; §15)** are all DONE and verified — **227 tests pass against a real Postgres**. The system runs end-to-end through a real CLI (`datum ingest|search|serve|eval|benchmark`) and a real MCP server driven by a real MCP client: semantic search works (zero-term-overlap queries retrieve the right section), out-of-corpus queries abstain, docx/pptx/xlsx/html/csv ingest through Docling into the same pipeline, and all five MCP verbs round-trip over stdio with tenancy fail-closed. A real-PDF stress test (§16) drove three verified quality upgrades — **bge-m3 multilingual embedder, per-deployment abstention floor, ocrmac OCR (25→30 of 42)**. **Open levers:** fix #4 table-aware chunking, a Docling VLM pass for charts/diagrams, and the human GUI-client step (§15); then Phase-1.
@@ -57,7 +57,7 @@ The framework is **Datum**: *"retrieval is a compiled query, not a hand-wired pi
 | Research corpus (42 files, ~1500 sources) | DONE, verified | `research/` |
 | Verified common-issues taxonomy (CI-01…27) | DONE (2 adversarial rounds) | `research/03-synthesis/common-issues.md` |
 | Framework design spec | DONE | `design/FRAMEWORK.md` (+ 5 `proposal-*.md`, `judgment.md`) |
-| Paper draft (~9,500 words) + PDF (21pp, 6 figures) | FIRST DRAFT DONE | `paper/draft.md`, `paper/datum-paper.pdf` |
+| Paper draft (~9,500 words) + PDF (21pp, 6 figures) | FIRST DRAFT DONE | private `Datum-paper` repo |
 | **Datum code — M0 foundation** | **DONE, verified** | `datum/src/datum/{kernel,storage,security,groundstore,writepath,operators,derivation/chunking,evidence,planner,policy,mcp_server}` |
 | **Datum code — Milestone A (walking skeleton)** | **DONE, verified (152 tests)** | `datum/` — runs end-to-end via CLI + MCP |
 | **Datum code — Milestone B (hybrid retrieval)** | **DONE + verified (214 tests); both adversarial reviews passed, fixes applied (decisions #19–28)** | dense+BM25+ANN fused (RRF) + cross-encoder rerank, all through the conformance gate |
@@ -98,7 +98,7 @@ Package: `datum/src/datum/`. Layer model (FRAMEWORK.md §architecture): L0 objec
 - **Install:** `pip install -e '.[dev]'` inside the venv. **As of 2026-08-08 the venv ALSO has the full Milestone-B + multi-format stack installed:** `[embed]` (sentence-transformers 5.7.0, torch 2.13.0) and Docling 2.118.1 with all OCR engines (easyocr/ocrmac/rapidocr/tesserocr) + Whisper ASR. These are lazy-imported, so the core still runs without them. All routed through Artifactory. (pyproject's `parse`/`embed` extras should be updated to pin these + the OCR extras when the Docling parser is wired — see task #30.)
 - **MCP SDK:** installed `mcp==2.0.0` — the class is `mcp.server.mcpserver.MCPServer` (NOT the v1 `FastMCP`). Schemas are `input_schema`/`output_schema` (snake_case). pyproject floor is `mcp>=2.0`.
 - **Tests:** `DATUM_PG_DSN=postgresql://localhost/<scratch-db> python -m pytest tests/ -q`. DB-backed tests skip cleanly if no Postgres is reachable. **152 pass** (verified 2026-08-08, ~1.8s). See the TEST-SAFETY note above before running.
-- **Paper tooling:** `tectonic` (LaTeX) + `pandoc` for the PDF; `rsvg-convert` renders the SVG figures. Rebuild: see `paper/` (figures are hand-authored SVG in `paper/figures/`).
+- **Paper tooling:** `tectonic` (LaTeX) + `pandoc` for the PDF; `rsvg-convert` renders the SVG figures. Rebuild: see the private `Datum-paper` repo (figures are hand-authored SVG).
 
 ---
 
@@ -109,7 +109,7 @@ Package: `datum/src/datum/`. Layer model (FRAMEWORK.md §architecture): L0 objec
 - `research/02-frameworks/` — 20 evidence-based autopsies (~60 products; every issue tagged + severity + documented-recurring/anecdote/inference).
 - `research/03-synthesis/common-issues.md` — the VERIFIED taxonomy (CI-01…27; 4 confirmed / 8 weakened-and-restated / 0 refuted after 2 adversarial rounds) + `verification-report.md` + 6 `failures-*.md`.
 - `design/FRAMEWORK.md` — the full spec (name: Datum). `proposal-*.md` (5 rival designs), `judgment.md`.
-- `paper/draft.md` — the paper (source of truth). `paper/STYLE.md` — the anti-AI-slop style rules (SEE §11 — critical). `paper/outline.md`. `paper/datum-paper.pdf` — 21pp typeset output. `paper/figures/*.svg` — 6 figures (fig6 is a TEMPLATE with placeholder XX.X values, honestly marked — no fabricated results).
+- The paper (draft, style rules, outline, typeset PDF, figures) lives in the private `Datum-paper` repository until publication.
 
 ---
 
@@ -194,7 +194,7 @@ Then **Milestone C** (wire `eval/regression.py` as a real gate; more concurrency
 ## 11. User preferences & hard rules (do not violate)
 
 - **Quality bar: "don't compromise / don't adjust to a lower solution."** When something's genuinely blocked or a tradeoff is real, surface it and ask — don't silently downscope.
-- **Paper voice (`paper/STYLE.md`):** NO AI tells. No em/en dashes; no mid-paragraph setup-colons; no clipped 3-word fragments; no showy vocabulary; no "leverage/delve/robust/landscape/ecosystem" etc. Plain, human, complete sentences. Internal process (workflows, agents, adversarial rounds, CI-NN codes) is translated to normal research language in the paper, never exposed. Real diagrams (hand-authored SVG), real tables — never AI-image-generated. No fabricated results — the results figure is a labeled template.
+- **Paper voice (STYLE.md, private `Datum-paper` repo):** NO AI tells. No em/en dashes; no mid-paragraph setup-colons; no clipped 3-word fragments; no showy vocabulary; no "leverage/delve/robust/landscape/ecosystem" etc. Plain, human, complete sentences. Internal process (workflows, agents, adversarial rounds, CI-NN codes) is translated to normal research language in the paper, never exposed. Real diagrams (hand-authored SVG), real tables — never AI-image-generated. No fabricated results — the results figure is a labeled template.
 - **Git (user's global CLAUDE.md):** commit/PR ONLY when asked. NEVER add Claude/Anthropic co-authorship or "Generated with" lines. Author as the user's own identity (`ayush-lilly <ayush.kumar1@lilly.com>`). User must be sole contributor.
 - **Compliance:** Artifactory is pip's index — RESOLVED (§8); packages route through Lilly's mirror. `brew` / GitHub-source / Postgres C-extensions are outside the PyPI rule. Do NOT use the pytorch.org `--extra-index-url` (Docling's Nemotron OCR command) — non-Artifactory and CUDA-only.
 - The user is testing/using the build directly — "it actually works when run" is the bar, not "it compiles."
