@@ -3,12 +3,31 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
+# Distribution name. If "datum" is unavailable on PyPI at publish time, change
+# ONLY this line (e.g. to "datum-rag"); the import stays `import datum` and the
+# CLI stays `datum` either way — distribution and import names are independent.
 name = "datum"
 version = "0.1.0"
-description = "A retrieval substrate for the agentic era: a compiled plan, not a hand-wired physical path."
+description = "A retrieval substrate for AI agents: every query compiles to an explainable, replayable plan over one versioned, tenant-isolated store."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
+authors = [{ name = "COLONAYUSH" }]
+keywords = [
+    "rag", "retrieval", "retrieval-augmented-generation", "agents", "mcp",
+    "search", "bm25", "vector-search", "pgvector", "provenance", "multitenant",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Text Processing :: Indexing",
+    "Typing :: Typed",
+]
+
 dependencies = [
     "psycopg[binary,pool]>=3.1",
     "pgvector>=0.3",
@@ -18,6 +37,12 @@ dependencies = [
     "mcp>=2.0",
     "click>=8.1",
 ]
+
+[project.urls]
+Homepage = "https://github.com/COLONAYUSH/Datum"
+Repository = "https://github.com/COLONAYUSH/Datum"
+Issues = "https://github.com/COLONAYUSH/Datum/issues"
+Changelog = "https://github.com/COLONAYUSH/Datum/blob/main/docs/decisions.md"
 
 [project.optional-dependencies]
 # Heavy, lazily-imported dependencies. Installing datum's core (kernel, storage,

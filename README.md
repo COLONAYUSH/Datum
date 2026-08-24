@@ -71,6 +71,7 @@ through a metadata filter.
 - [The Python API](#the-python-api)
 - [How retrieval works](#how-retrieval-works)
 - [Use it from an agent (MCP)](#use-it-from-an-agent-mcp)
+- [Use it from any language (HTTP)](#use-it-from-any-language-http)
 - [Write your own operator](#write-your-own-operator)
 - [Security and governance](#security-and-governance)
 - [How Datum is different](#how-datum-is-different)
@@ -253,7 +254,9 @@ dataclasses with zero I/O. Everything else depends on it in one direction and ne
 ## Quickstart
 
 ```bash
-# 1. Get the code and install it (editable, with the dense-retrieval extra)
+# 1. Install. Directly from GitHub (with the dense-retrieval extra):
+pip install 'datum[embed] @ git+https://github.com/COLONAYUSH/Datum.git'
+# ...or clone for development:
 git clone https://github.com/COLONAYUSH/Datum.git
 cd Datum
 python -m venv .venv && source .venv/bin/activate
@@ -435,6 +438,31 @@ The dev server binds one principal for the whole stdio session, which is a docum
 local use. A real multi-tenant deployment binds a principal per connection from an auth backend.
 
 </details>
+
+<div align="right"><a href="#contents">back to top</a></div>
+
+## Use it from any language (HTTP)
+
+MCP is the agent-native way in. For everything else, the same six verbs are available over plain
+HTTP, so Node, Go, curl, or any stack that can POST JSON can use Datum without Python:
+
+```bash
+DATUM_HTTP_TOKEN=$(openssl rand -hex 24) datum serve-http --namespace tenant:acme --port 8787
+```
+
+```bash
+curl -s http://127.0.0.1:8787/v1/search \
+  -H "Authorization: Bearer $DATUM_HTTP_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "how do I roll back a deploy"}'
+```
+
+Endpoints: `POST /v1/{search,fetch,navigate,explain,since,feedback}` and `GET /v1/health`.
+A bearer token is required, and there is no anonymous mode; the server binds localhost by default
+and serves one namespace per process, so a compromised client cannot reach another tenant's
+partition by editing JSON. Tenancy is still enforced inside the corpus on every call, exactly as
+in the Python API and MCP paths, and the HTTP surface is covered by the same test suite
+(`tests/mcp_server/test_http_api.py`).
 
 <div align="right"><a href="#contents">back to top</a></div>
 

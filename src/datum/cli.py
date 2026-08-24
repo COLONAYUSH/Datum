@@ -104,7 +104,7 @@ def serve(namespace: str, dsn: str) -> None:
     corpus = Corpus.open(dsn)
     server = build_server(corpus)
     click.echo(
-        f"datum MCP server: 5 read verbs, namespace={namespace!r}, dsn={dsn!r}. "
+        f"datum MCP server: 6 verbs, namespace={namespace!r}, dsn={dsn!r}. "
         "Serving over stdio (dev principal bound for the whole session).",
         err=True,
     )
@@ -223,3 +223,39 @@ def calibrate(namespace: str, dsn: str) -> None:
             f"holdout MRR {result.holdout_mrr:.4f} vs current {result.baseline_holdout_mrr:.4f}"
         )
     click.echo(("PROMOTED — " if result.promoted else "NOT promoted — ") + result.reason)
+
+
+@main.command("serve-http")
+@click.option("--namespace", required=True, help="ACL namespace this server instance serves.")
+@click.option("--dsn", default=_DEFAULT_DSN, help="Postgres DSN.")
+@click.option("--host", default="127.0.0.1", show_default=True, help="Bind address.")
+@click.option("--port", default=8787, show_default=True, type=int, help="Bind port.")
+@click.option(
+    "--token",
+    envvar="DATUM_HTTP_TOKEN",
+    default=None,
+    help="Bearer token clients must present (or set DATUM_HTTP_TOKEN). Required.",
+)
+def serve_http(namespace: str, dsn: str, host: str, port: int, token: str | None) -> None:
+    """Run the plain HTTP JSON API (the non-MCP way in): the same six verbs,
+    callable from any language. One namespace per server process, bearer-token
+    required, binds localhost by default."""
+    from datum import Corpus
+    from datum.http_api import build_http_server
+
+    if not token:
+        raise click.UsageError(
+            "a bearer token is required: pass --token or set DATUM_HTTP_TOKEN. "
+            "There is no anonymous mode."
+        )
+    corpus = Corpus.open(dsn)
+    server = build_http_server(corpus, namespace=namespace, token=token, host=host, port=port)
+    click.echo(
+        f"datum HTTP API: 6 verbs at http://{host}:{port}/v1/*, namespace={namespace!r}, "
+        f"dsn={dsn!r}. POST JSON with 'Authorization: Bearer <token>'.",
+        err=True,
+    )
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        server.shutdown()

@@ -1225,3 +1225,34 @@ Full grids, versions, timings, rerun commands, and preserved failure
 artifacts: benchmarks/adversarial/competitors/RESULTS.md. Paper updated
 (new Section 6.5, Table 3, Figure 11 = figures/fig12-head-to-head.svg;
 old 6.5/6.6 -> 6.6/6.7, feedback figure -> Figure 12).
+
+## 45. Distribution: a PyPI-ready package and a plain HTTP surface as the non-MCP way in
+
+Making the framework usable by everyone means two different things, and this
+closes both. First, packaging: the wheel and sdist now build cleanly through
+the standard PEP 517 hooks with full metadata (urls, classifiers, keywords,
+SPDX license), and the two things that silently break real wheel installs —
+the PEP 561 `py.typed` marker and the runtime-loaded migration `.sql` files —
+are verified present in the built artifact, not assumed. A `publish.yml`
+workflow releases to PyPI on version tags via Trusted Publishing (no token
+stored in the repo), and `ci.yml` runs the suite on a real pgvector Postgres
+service container; the ML-dependent tests skip themselves loudly when the
+extras are absent, which is the suite's designed degradation, so CI covers
+the full core contract surface without a GPU or model downloads. The
+distribution NAME may need to change at publish time (the bare name is
+likely taken on the index, unverifiable from this network); only the one
+`name =` line changes if so — the import stays `import datum` and the CLI
+stays `datum`.
+
+Second, access without MCP: `datum serve-http` (src/datum/http_api.py)
+exposes the same six verbs over plain JSON-over-HTTP, standard library only,
+so any language that can POST JSON can use the framework. The deliberate
+constraints are part of the design, not gaps: a bearer token is REQUIRED
+(constant-time compared; the server refuses to construct without one — no
+anonymous mode exists to misconfigure), one namespace per server process with
+the principal bound at startup (a client cannot reach another partition by
+editing JSON; multi-tenant means one process per tenant or a real gateway),
+localhost bind by default, and structured errors that never leak a stack
+trace (a forged hit id is a 400, and failed searches still persist their
+audit trace). Seven end-to-end tests drive it over real HTTP against a real
+corpus, including both auth failures and the forged-hit case. Suite: 265.
