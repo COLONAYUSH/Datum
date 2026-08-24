@@ -58,7 +58,7 @@ through a metadata filter.
 > pipeline (dense + BM25 + ANN, fused and reranked), the evaluation gate with abstention, MCP
 > acceptance over the real transport, multi-format ingestion with 20-script image OCR, and the
 > feedback loop. 258 tests, no mocked components. Benchmarks are measured and stored in-repo
-> (`benchmarks/`, `docs/bench/`). Not yet on a package index, so install from source for now.
+> (`benchmarks/`, `docs/bench/`). Install with `pip install datumrag` (import stays `import datum`).
 > The public API below is what the code does today.
 
 ## Contents
@@ -255,7 +255,9 @@ dataclasses with zero I/O. Everything else depends on it in one direction and ne
 
 ```bash
 # 1. Install. Directly from GitHub (with the dense-retrieval extra):
-pip install 'datum[embed] @ git+https://github.com/COLONAYUSH/Datum.git'
+pip install 'datumrag[embed]'
+# ...or straight from GitHub:
+# pip install 'datumrag[embed] @ git+https://github.com/COLONAYUSH/Datum.git'
 # ...or clone for development:
 git clone https://github.com/COLONAYUSH/Datum.git
 cd Datum

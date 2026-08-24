@@ -3,10 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-# Distribution name. If "datum" is unavailable on PyPI at publish time, change
-# ONLY this line (e.g. to "datum-rag"); the import stays `import datum` and the
-# CLI stays `datum` either way — distribution and import names are independent.
-name = "datum"
+# Distribution name (what you `pip install`). The import stays `import datum`
+# and the CLI stays `datum` — distribution and import names are independent.
+name = "datumrag"
 version = "0.1.0"
 description = "A retrieval substrate for AI agents: every query compiles to an explainable, replayable plan over one versioned, tenant-isolated store."
 readme = "README.md"
