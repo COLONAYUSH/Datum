@@ -35,3 +35,9 @@ jobs:
           name: dist
           path: dist/
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # A re-pushed tag (e.g. after a history rewrite) re-fires this
+          # workflow for a version PyPI already has. PyPI permanently refuses
+          # duplicate files, which is correct, but it should read as a no-op
+          # here, not a failure email.
+          skip-existing: true
