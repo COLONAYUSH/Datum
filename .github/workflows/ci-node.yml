@@ -1,0 +1,43 @@
+name: CI (Node client)
+
+on:
+  push:
+    branches: [main]
+    paths: ["clients/node/**", ".github/workflows/ci-node.yml"]
+  pull_request:
+    paths: ["clients/node/**", ".github/workflows/ci-node.yml"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: clients/node
+    strategy:
+      # Tested on the two currently-supported Node lines (Current + Active
+      # LTS). package.json's engines field states >=18 as the RUNTIME
+      # requirement (the client only needs global fetch + ES2022, both
+      # available since 18) — that is a compatibility statement, not a claim
+      # this CI has verified it. The test suite runs the real TypeScript
+      # source directly via Node's native type-stripping (stable, unflagged,
+      # since Node 22.6), which both versions here support; older LTS lines
+      # were deliberately not added to this matrix rather than faked with a
+      # build-only or swallowed-failure fallback.
+      matrix:
+        node-version: ["22", "24"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          # No npm cache configured yet: actions/setup-node's cache keys off
+          # a committed package-lock.json, which doesn't exist until this
+          # workflow's first successful run produces one. Add
+          # `cache: npm` / `cache-dependency-path` once that lockfile lands.
+      # npm ci needs a committed package-lock.json, which requires network
+      # access to the registry to generate (unavailable in this dev environment);
+      # npm install works without one. Switch to `npm ci` once a lockfile is
+      # committed (it will be, the first time this workflow runs successfully).
+      - run: npm install
+      - run: npm run build
+      - run: npm test

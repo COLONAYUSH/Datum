@@ -469,6 +469,23 @@ partition by editing JSON. Tenancy is still enforced inside the corpus on every 
 in the Python API and MCP paths, and the HTTP surface is covered by the same test suite
 (`tests/mcp_server/test_http_api.py`).
 
+**Node/TypeScript client.** A typed wrapper over the HTTP surface above ships at
+[`clients/node`](clients/node) and publishes to npm as `@colonayush/datumrag`:
+
+```bash
+npm install @colonayush/datumrag
+```
+
+```ts
+import { DatumClient } from "@colonayush/datumrag";
+
+const client = new DatumClient({ baseUrl: "http://127.0.0.1:8787", token: process.env.DATUM_HTTP_TOKEN! });
+const evidence = await client.search("how do I roll back a deploy");
+```
+
+It is a client, not a port: the framework itself stays Python and PostgreSQL, and this package
+only translates typed method calls into the same JSON calls curl makes above.
+
 <div align="right"><a href="#contents">back to top</a></div>
 
 ## Write your own operator

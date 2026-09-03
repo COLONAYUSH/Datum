@@ -17,7 +17,7 @@ record, or schedule the outcomes of the two Milestone B adversarial reviews —
 the now-implemented unconditional audit trail that #27 deferred); 31 the
 multi-format DoclingParser (task #30) and its environment-honest benchmark;
 32 the Milestone D end-to-end MCP acceptance over the real transport; 33 the
-MarkdownParser code-fence heading fix that Milestone D dogfooding surfaced; 34 the bge-m3 default embedder + per-deployment abstention floor from the PDF stress test; 35 the ocrmac OCR default (its picture-text/VLM-frontier conclusion later CORRECTED by 36); 36 the image-OCR composition that recovers picture/chart/facsimile/Devanagari text Docling's markdown export drops; 37 table-aware chunking (header-carrying row-groups) for large paginated tables; 38 the rerank-pool coverage guarantee that closes an RRF fusion blind spot, and the honest diagnosis of the remaining Docling heading-detection gap it does NOT fix; 39 stress test #2 (unseen document): script families (Arabic/Tamil), the embedded-image-object pass, per-crop plurality arbitration, PDF metadata ingestion, and the bge-reranker-v2-m3 default that matches the multilingual embedder; 40 the 20-family multilingual roster (readback-verified, 18 strong + 2 weak) with the sparse-gate + noise-floor that keep a broad default hallucination-free; 41 LLM-free contextual retrieval (section-path-prefixed view inputs) + the labeled NLLB ingest gloss — doc-2 44/44; 42 the first public-benchmark validation (BEIR SciFact nDCG@10 = 0.697 — above BM25/ColBERTv2, at SPLADE++ level, zero-shot through the full governed pipeline); 43 the VisionDescriber slot (pluggable picture understanding, provenance-labeled; local small VLMs measured unusable — the slot is the enterprise value); 44 the relevance-feedback loop (signed-token judgments, promotion-gated calibration, per-namespace overrides visible in EXPLAIN); 45 the repo-resident SciFact harness (scripts/beir_scifact.py) + the re-measured result (bge-large English profile, nDCG@10 0.714, above all named baselines) after the original scratchpad harness was lost. 46 the adversarial head-to-head (Datum 83/86 fresh vs LangChain 64, LlamaIndex 66, Haystack 67, LC+OCR 66 — parity models, shared reranker; bolt-on OCR nets ~zero; LlamaIndex default reader silently indexes raw PDF bytes).
+MarkdownParser code-fence heading fix that Milestone D dogfooding surfaced; 34 the bge-m3 default embedder + per-deployment abstention floor from the PDF stress test; 35 the ocrmac OCR default (its picture-text/VLM-frontier conclusion later CORRECTED by 36); 36 the image-OCR composition that recovers picture/chart/facsimile/Devanagari text Docling's markdown export drops; 37 table-aware chunking (header-carrying row-groups) for large paginated tables; 38 the rerank-pool coverage guarantee that closes an RRF fusion blind spot, and the honest diagnosis of the remaining Docling heading-detection gap it does NOT fix; 39 stress test #2 (unseen document): script families (Arabic/Tamil), the embedded-image-object pass, per-crop plurality arbitration, PDF metadata ingestion, and the bge-reranker-v2-m3 default that matches the multilingual embedder; 40 the 20-family multilingual roster (readback-verified, 18 strong + 2 weak) with the sparse-gate + noise-floor that keep a broad default hallucination-free; 41 LLM-free contextual retrieval (section-path-prefixed view inputs) + the labeled NLLB ingest gloss — doc-2 44/44; 42 the first public-benchmark validation (BEIR SciFact nDCG@10 = 0.697 — above BM25/ColBERTv2, at SPLADE++ level, zero-shot through the full governed pipeline); 43 the VisionDescriber slot (pluggable picture understanding, provenance-labeled; local small VLMs measured unusable — the slot is the enterprise value); 44 the relevance-feedback loop (signed-token judgments, promotion-gated calibration, per-namespace overrides visible in EXPLAIN); 45 the repo-resident SciFact harness (scripts/beir_scifact.py) + the re-measured result (bge-large English profile, nDCG@10 0.714, above all named baselines) after the original scratchpad harness was lost. 46 the adversarial head-to-head (Datum 83/86 fresh vs LangChain 64, LlamaIndex 66, Haystack 67, LC+OCR 66 — parity models, shared reranker; bolt-on OCR nets ~zero; LlamaIndex default reader silently indexes raw PDF bytes); 47 PyPI packaging + the HTTP API as the non-MCP access path; 48 the Node/TypeScript client (a thin wrapper over the HTTP surface, not a framework port) published separately to npm.
 
 ## 1. `WriteOp` is a value type, not an executor Protocol
 
@@ -1226,7 +1226,7 @@ artifacts: benchmarks/adversarial/competitors/RESULTS.md. Paper updated
 (new Section 6.5, Table 3, Figure 11 = figures/fig12-head-to-head.svg;
 old 6.5/6.6 -> 6.6/6.7, feedback figure -> Figure 12).
 
-## 45. Distribution: a PyPI-ready package and a plain HTTP surface as the non-MCP way in
+## 47. Distribution: a PyPI-ready package and a plain HTTP surface as the non-MCP way in
 
 Making the framework usable by everyone means two different things, and this
 closes both. First, packaging: the wheel and sdist now build cleanly through
@@ -1256,3 +1256,40 @@ localhost bind by default, and structured errors that never leak a stack
 trace (a forged hit id is a 400, and failed searches still persist their
 audit trace). Seven end-to-end tests drive it over real HTTP against a real
 corpus, including both auth failures and the forged-hit case. Suite: 265.
+
+## 48. A Node/TypeScript client, not a Node port, published separately from the Python package
+
+"Available to everyone" does not mean rewriting the framework in a second
+language. Datum's core, the write-ahead log, the bitemporal store, the
+conformance-gated operators, the compiled plan, stays Python and PostgreSQL
+by design; duplicating that in TypeScript against the same database would
+mean two implementations of the one thing this project treats as the
+single source of truth, drifting from each other from day one. Instead,
+`clients/node` is a thin wire client for the HTTP surface (#47): six typed
+methods, one per verb, translating camelCase options to the server's
+snake_case JSON at the edge and mapping every non-2xx response to a typed
+`DatumError` carrying the real HTTP status. It embeds no retrieval logic
+and enforces no tenancy; the server is the boundary, as stated plainly in
+its own README.
+
+Two facts changed the shape of the release pipeline from the PyPI one (#47).
+First, npm's OIDC trusted publishing (GA July 2025) has a bootstrap gap
+PyPI's pending-publisher flow does not: the package must already exist
+before a trust relationship can be registered, so a first publish cannot be
+token-free. The publish workflow therefore uses a classic granular access
+token (`secrets.NPM_TOKEN`), with OIDC left as a documented future upgrade
+once the package exists. Second, this development machine has no network
+path to the npm registry (same restriction that blocked direct pypi.org
+checks in #47), so `npm ci` and any locally-run install were never
+possible here; the client's logic was verified with real HTTP requests
+against a real local server, using Node's native TypeScript execution
+(stable, unflagged, since Node 22.6) so the test suite runs the actual
+source with zero network dependency, and `npm ci` was replaced with
+`npm install` in the workflows for the same reason (no committed
+`package-lock.json` exists yet to make `ci` valid) — this is a documented,
+temporary gap to close once a lockfile lands from a real CI run, not a
+silent one.
+
+The npm and PyPI release trains are kept independently tag-triggered
+(`js-v*` versus `v*`) so a release of one package can never fire the
+other's publish workflow.

@@ -1,0 +1,41 @@
+name: Publish Node client to npm
+
+# Publishes clients/node on tags like js-v0.1.0 (a separate prefix from the
+# Python package's v* tags, so one release doesn't fire the other).
+#
+# Uses a classic access token (secrets.NPM_TOKEN), not OIDC trusted
+# publishing. npm's trusted-publishing (GA July 2025) requires the package
+# to already exist before you can register the trust relationship — there is
+# no PyPI-style "pending publisher" for npm — so a token-free first publish
+# isn't possible. One-time setup on npmjs.com: Account -> Access Tokens ->
+# Generate New Token -> Granular Access Token, scoped to read+write on this
+# one package, then add it as the GitHub secret NPM_TOKEN (repo Settings ->
+# Secrets and variables -> Actions). Once the package exists, a trusted
+# publisher can optionally be added later on the package's npm settings page
+# to drop the token — see docs/decisions.md #46.
+on:
+  push:
+    tags: ["js-v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: clients/node
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+      # npm ci needs a committed package-lock.json, which requires network
+      # access to the registry to generate (unavailable in this dev environment);
+      # npm install works without one. Switch to `npm ci` once a lockfile is
+      # committed (it will be, the first time this workflow runs successfully).
+      - run: npm install
+      - run: npm run build
+      - run: npm test
+      - run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
