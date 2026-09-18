@@ -29,6 +29,9 @@ through a metadata filter.
 [![Status](https://img.shields.io/badge/status-pre--1.0-orange.svg)](#project-status)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 
+[![PyPI downloads](https://static.pepy.tech/badge/datumrag)](https://pepy.tech/project/datumrag)
+[![npm downloads](https://img.shields.io/npm/dw/@colonayush/datumrag.svg?label=npm%20downloads)](https://npmtrends.com/@colonayush/datumrag)
+
 <!--
 [![CI](https://img.shields.io/github/actions/workflow/status/COLONAYUSH/Datum/ci.yml?label=CI)](https://github.com/COLONAYUSH/Datum/actions)
 [![Stars](https://img.shields.io/github/stars/COLONAYUSH/Datum?style=social)](https://github.com/COLONAYUSH/Datum/stargazers)
